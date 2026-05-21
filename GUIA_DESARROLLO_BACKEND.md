@@ -444,6 +444,40 @@ ROLE_DUENIO
 - Implementar CRUD.
 - Validar datos personales, telefono, correo y documento.
 
+**Archivos creados en este paso:**
+
+```text
+persistence/entity/Duenio.java
+domain/repository/DuenioRepository.java
+domain/dto/request/DuenioRequest.java
+domain/dto/response/DuenioResponse.java
+domain/service/DuenioService.java
+web/DuenioController.java
+```
+
+**Tabla que creara Hibernate:**
+
+```text
+duenios
+```
+
+**Campos principales de `duenios`:**
+
+| Campo | Descripcion |
+| --- | --- |
+| `id` | Identificador autogenerado. |
+| `usuario_id` | Relacion opcional 1 a 1 con `usuarios`. |
+| `nombres` | Nombres del propietario. |
+| `apellidos` | Apellidos del propietario. |
+| `tipo_documento` | Tipo de documento, por ejemplo DNI o CE. |
+| `numero_documento` | Numero de documento unico. |
+| `telefono` | Telefono de contacto. |
+| `email` | Correo unico del propietario. |
+| `direccion` | Direccion opcional. |
+| `active` | Estado logico del registro. |
+| `created_at` | Fecha de creacion. |
+| `updated_at` | Fecha de ultima actualizacion. |
+
 **Endpoints sugeridos:**
 
 | Metodo | Ruta | Descripcion |
@@ -453,6 +487,16 @@ ROLE_DUENIO
 | `GET` | `/api/duenios/{id}` | Obtener detalle de duenio. |
 | `PUT` | `/api/duenios/{id}` | Actualizar duenio. |
 | `DELETE` | `/api/duenios/{id}` | Desactivar duenio. |
+
+**Permisos definidos:**
+
+| Endpoint | Roles |
+| --- | --- |
+| `POST /api/duenios` | `ADMIN`, `ASISTENTE` |
+| `GET /api/duenios` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/duenios/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/duenios/{id}` | `ADMIN`, `ASISTENTE` |
+| `DELETE /api/duenios/{id}` | `ADMIN`, `ASISTENTE` |
 
 **Resultado esperado:**
 

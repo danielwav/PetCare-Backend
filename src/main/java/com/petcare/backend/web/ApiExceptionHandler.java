@@ -1,6 +1,7 @@
 package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.response.ErrorResponse;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -40,6 +41,12 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(UsernameNotFoundException.class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	ErrorResponse handleUsernameNotFound(UsernameNotFoundException exception, HttpServletRequest request) {
+		return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+	}
+
+	@ExceptionHandler(EntityNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	ErrorResponse handleEntityNotFound(EntityNotFoundException exception, HttpServletRequest request) {
 		return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
 	}
 
