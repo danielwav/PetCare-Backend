@@ -322,6 +322,7 @@ RESUELTA
 ```text
 pom.xml
 src/main/resources/application.properties
+src/main/java/com/petcare/backend/config/OpenApiConfig.java
 src/main/java/com/petcare/backend/health/HealthController.java
 src/test/java/com/petcare/backend/health/HealthControllerTest.java
 ```
@@ -340,6 +341,11 @@ spring.jpa.hibernate.ddl-auto=${JPA_DDL_AUTO:update}
 spring.jpa.show-sql=${JPA_SHOW_SQL:false}
 spring.jpa.open-in-view=false
 spring.jpa.properties.hibernate.format_sql=true
+
+springdoc.api-docs.path=/v3/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.swagger-ui.operations-sorter=method
+springdoc.swagger-ui.tags-sorter=alpha
 ```
 
 **Variables locales para MySQL:**
@@ -354,7 +360,7 @@ $env:DB_PASSWORD="admin"
 - El backend compila correctamente.
 - El endpoint de salud responde.
 - La aplicacion puede conectarse a MySQL.
-- Swagger queda disponible cuando se agregue la dependencia OpenAPI.
+- Swagger queda disponible en `http://localhost:8080/swagger-ui.html`.
 
 ### Paso 2: Configurar seguridad y JWT
 

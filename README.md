@@ -40,3 +40,23 @@ Health check:
 ```http
 GET /api/health
 ```
+
+## Swagger / OpenAPI
+
+Con la aplicacion levantada, la documentacion de la API esta disponible en:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+La especificacion OpenAPI se expone en:
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
+Para probar endpoints protegidos, primero inicia sesion en `/api/auth/login`, copia el token y usa el boton `Authorize` con formato:
+
+```text
+Bearer <token>
+```
