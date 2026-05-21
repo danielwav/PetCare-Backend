@@ -14,7 +14,7 @@ Repositorio del Backend del proyecto PetCare
 ## Configuracion local
 
 Por defecto la aplicacion usa MySQL en `localhost:3306/petcare`.
-Puedes cambiar la conexion con variables de entorno:
+
 
 ```bash
 DB_URL=jdbc:mysql://localhost:3306/petcare
