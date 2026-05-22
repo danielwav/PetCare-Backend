@@ -50,7 +50,7 @@ public class Veterinario {
 	@Column(nullable = false, length = 100)
 	private String especialidad;
 
-	@Column(nullable = false, length = 20)
+	@Column(nullable = false, length = 9)
 	private String telefono;
 
 	@Column(nullable = false, unique = true, length = 120)

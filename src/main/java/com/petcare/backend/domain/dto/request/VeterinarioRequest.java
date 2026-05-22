@@ -14,7 +14,7 @@ public record VeterinarioRequest(
 		@NotBlank @Size(max = 80) String apellidos,
 		@NotBlank @Size(max = 30) String numeroColegiatura,
 		@NotBlank @Size(max = 100) String especialidad,
-		@NotBlank @Size(max = 20) @Pattern(regexp = "^[0-9+()\\-\\s]{6,20}$") String telefono,
+		@NotBlank @Pattern(regexp = "^\\d{9}$") String telefono,
 		@NotBlank @Email @Size(max = 120) String email,
 		List<@Valid HorarioVeterinarioRequest> horarios
 ) {

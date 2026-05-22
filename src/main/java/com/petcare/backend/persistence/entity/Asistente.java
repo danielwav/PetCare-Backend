@@ -46,7 +46,7 @@ public class Asistente {
 	@Column(nullable = false, unique = true, length = 20)
 	private String numeroDocumento;
 
-	@Column(nullable = false, length = 20)
+	@Column(nullable = false, length = 9)
 	private String telefono;
 
 	@Column(nullable = false, unique = true, length = 120)
