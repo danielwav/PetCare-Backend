@@ -31,4 +31,21 @@ public interface MascotaRepository extends JpaRepository<Mascota, Long> {
 			@Param("duenioId") Long duenioId,
 			@Param("active") Boolean active
 	);
+
+	@Query("""
+			select m from Mascota m
+			join fetch m.duenio d
+			where m.active = true
+			and not exists (
+				select c from ControlMensualMascota c
+				where c.mascota = m
+				and c.anio = :anio
+				and c.mes = :mes
+			)
+			order by m.nombre asc
+			""")
+	List<Mascota> findActivePetsWithoutMonthlyControl(
+			@Param("anio") Integer anio,
+			@Param("mes") Integer mes
+	);
 }

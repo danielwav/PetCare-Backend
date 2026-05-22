@@ -1440,7 +1440,18 @@ GET /api/alertas/vacunas?dias=30
 
 **Que se esta haciendo:** se concentra la informacion operativa importante para el personal de la veterinaria.
 
-**Alertas recomendadas:**
+**Archivos principales:**
+
+```text
+domain/dto/response/AlertaCitaResponse.java
+domain/dto/response/AlertaVacunaResponse.java
+domain/dto/response/ControlMensualPendienteResponse.java
+domain/dto/response/PanelAlertasDiaResponse.java
+domain/service/AlertaService.java
+web/AlertaController.java
+```
+
+**Alertas implementadas:**
 
 - Citas programadas para hoy.
 - Citas sin confirmar.
@@ -1450,11 +1461,58 @@ GET /api/alertas/vacunas?dias=30
 - Vacunas vencidas.
 - Controles mensuales pendientes.
 
-**Endpoint sugerido:**
+**Reglas de negocio:**
+
+- El panel usa la fecha actual por defecto.
+- Se puede consultar otra fecha con el parametro `fecha`.
+- Las alertas de vacunas usan una ventana de 30 dias por defecto.
+- Se puede cambiar la ventana de vacunas con `diasVacunas`.
+- Las citas programadas del dia incluyen estados `PROGRAMADA` y `CONFIRMADA`.
+- Las citas sin confirmar son citas `PROGRAMADA` con `requiereConfirmacion = true`.
+- Las citas pendientes de atencion son citas `CONFIRMADA`.
+- Las citas no asistidas son citas en estado `NO_ASISTIO`.
+- Las vacunas vencidas son registros con `fechaProximaDosis` menor a la fecha actual.
+- Las vacunas proximas son registros con `fechaProximaDosis` entre hoy y la ventana configurada.
+- Los controles mensuales pendientes son mascotas activas sin control registrado en el mes y anio del panel.
+
+**Endpoint implementado:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `GET` | `/api/alertas/dia` | Devuelve resumen operativo del dia. |
+
+**Parametros disponibles:**
+
+| Parametro | Ejemplo | Descripcion |
+| --- | --- | --- |
+| `fecha` | `2026-05-22` | Fecha del panel operativo. |
+| `diasVacunas` | `30` | Ventana para vacunas proximas o vencidas. |
+
+**Ejemplos de consulta:**
+
+```text
+GET /api/alertas/dia
+GET /api/alertas/dia?fecha=2026-05-22
+GET /api/alertas/dia?fecha=2026-05-22&diasVacunas=45
+```
+
+**Respuesta esperada:**
+
+El endpoint devuelve contadores y listas para:
+
+- `citasProgramadasHoy`
+- `citasSinConfirmar`
+- `citasConfirmadasPendientesAtencion`
+- `citasNoAsistidasHoy`
+- `vacunasProximas`
+- `vacunasVencidas`
+- `controlesMensualesPendientes`
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `GET /api/alertas/dia` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 
 **Resultado esperado:**
 
