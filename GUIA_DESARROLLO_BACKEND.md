@@ -521,6 +521,42 @@ duenios
 - Listar mascotas por duenio.
 - Preparar relacion con historia clinica, citas, vacunas y controles mensuales.
 
+**Archivos creados en este paso:**
+
+```text
+persistence/entity/Mascota.java
+persistence/enums/SexoMascota.java
+domain/repository/MascotaRepository.java
+domain/dto/request/MascotaRequest.java
+domain/dto/response/MascotaResponse.java
+domain/service/MascotaService.java
+web/MascotaController.java
+```
+
+**Tabla que creara Hibernate:**
+
+```text
+mascotas
+```
+
+**Campos principales de `mascotas`:**
+
+| Campo | Descripcion |
+| --- | --- |
+| `id` | Identificador autogenerado. |
+| `duenio_id` | Relacion obligatoria con `duenios`. |
+| `nombre` | Nombre de la mascota. |
+| `especie` | Especie, por ejemplo perro o gato. |
+| `raza` | Raza de la mascota. |
+| `sexo` | `MACHO` o `HEMBRA`. |
+| `fecha_nacimiento` | Fecha de nacimiento aproximada o real. |
+| `color` | Color o descripcion visual opcional. |
+| `peso_kg` | Peso actual opcional en kilogramos. |
+| `observaciones` | Observaciones generales opcionales. |
+| `active` | Estado logico del registro. |
+| `created_at` | Fecha de creacion. |
+| `updated_at` | Fecha de ultima actualizacion. |
+
 **Endpoints sugeridos:**
 
 | Metodo | Ruta | Descripcion |
@@ -530,6 +566,18 @@ duenios
 | `GET` | `/api/duenios/{id}/mascotas` | Listar mascotas por duenio. |
 | `GET` | `/api/mascotas/{id}` | Obtener detalle de mascota. |
 | `PUT` | `/api/mascotas/{id}` | Actualizar mascota. |
+| `DELETE` | `/api/mascotas/{id}` | Desactivar mascota. |
+
+**Permisos definidos:**
+
+| Endpoint | Roles |
+| --- | --- |
+| `POST /api/mascotas` | `ADMIN`, `ASISTENTE` |
+| `GET /api/mascotas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/duenios/{id}/mascotas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/mascotas/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/mascotas/{id}` | `ADMIN`, `ASISTENTE` |
+| `DELETE /api/mascotas/{id}` | `ADMIN`, `ASISTENTE` |
 
 **Resultado esperado:**
 
@@ -548,14 +596,82 @@ duenios
 - Validar que no existan citas cruzadas para el mismo veterinario.
 - Permitir consultar disponibilidad por fecha, veterinario y servicio.
 
+**Archivos creados en este paso:**
+
+```text
+persistence/entity/Veterinario.java
+persistence/entity/HorarioVeterinario.java
+domain/repository/VeterinarioRepository.java
+domain/repository/HorarioVeterinarioRepository.java
+domain/dto/request/VeterinarioRequest.java
+domain/dto/request/HorarioVeterinarioRequest.java
+domain/dto/response/VeterinarioResponse.java
+domain/dto/response/HorarioVeterinarioResponse.java
+domain/dto/response/DisponibilidadVeterinarioResponse.java
+domain/service/VeterinarioService.java
+web/VeterinarioController.java
+```
+
+**Tablas que creara Hibernate:**
+
+```text
+veterinarios
+horarios_veterinarios
+```
+
+**Campos principales de `veterinarios`:**
+
+| Campo | Descripcion |
+| --- | --- |
+| `id` | Identificador autogenerado. |
+| `usuario_id` | Relacion opcional 1 a 1 con `usuarios`. |
+| `nombres` | Nombres del veterinario. |
+| `apellidos` | Apellidos del veterinario. |
+| `numero_colegiatura` | Numero de colegiatura unico. |
+| `especialidad` | Especialidad o area principal. |
+| `telefono` | Telefono de contacto. |
+| `email` | Correo unico del veterinario. |
+| `active` | Estado logico del registro. |
+| `created_at` | Fecha de creacion. |
+| `updated_at` | Fecha de ultima actualizacion. |
+
+**Campos principales de `horarios_veterinarios`:**
+
+| Campo | Descripcion |
+| --- | --- |
+| `id` | Identificador autogenerado. |
+| `veterinario_id` | Relacion obligatoria con `veterinarios`. |
+| `dia_semana` | Dia de atencion, por ejemplo `MONDAY`. |
+| `hora_inicio` | Hora de inicio de atencion. |
+| `hora_fin` | Hora de fin de atencion. |
+| `duracion_bloque_minutos` | Intervalo usado para generar bloques disponibles. |
+| `active` | Estado logico del horario. |
+
+**Nota sobre cruces de citas:**
+
+En este paso la disponibilidad se calcula desde horarios activos del veterinario. La validacion final contra citas ocupadas se completara en el Paso 7, cuando exista la entidad `Cita` y sus estados.
+
 **Endpoints sugeridos:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `POST` | `/api/veterinarios` | Crear veterinario. |
 | `GET` | `/api/veterinarios` | Listar veterinarios. |
+| `GET` | `/api/veterinarios/{id}` | Obtener detalle de veterinario. |
 | `GET` | `/api/veterinarios/{id}/disponibilidad` | Consultar disponibilidad. |
 | `PUT` | `/api/veterinarios/{id}` | Actualizar veterinario. |
+| `DELETE` | `/api/veterinarios/{id}` | Desactivar veterinario. |
+
+**Permisos definidos:**
+
+| Endpoint | Roles |
+| --- | --- |
+| `POST /api/veterinarios` | `ADMIN` |
+| `GET /api/veterinarios` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/veterinarios/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/veterinarios/{id}/disponibilidad` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/veterinarios/{id}` | `ADMIN` |
+| `DELETE /api/veterinarios/{id}` | `ADMIN` |
 
 **Resultado esperado:**
 
