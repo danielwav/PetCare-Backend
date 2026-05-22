@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -63,5 +64,18 @@ public class CitaController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public CitaResponse cancel(@PathVariable Long id) {
 		return citaService.cancel(id);
+	}
+
+	@PatchMapping("/api/citas/{id}/confirmar")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public CitaResponse confirm(@PathVariable Long id, Authentication authentication) {
+		String confirmedBy = authentication == null ? "sistema" : authentication.getName();
+		return citaService.confirm(id, confirmedBy);
+	}
+
+	@GetMapping("/api/citas/alertas-confirmacion")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
+	public List<CitaResponse> findConfirmationAlerts(@RequestParam(required = false) Integer horas) {
+		return citaService.findConfirmationAlerts(horas);
 	}
 }

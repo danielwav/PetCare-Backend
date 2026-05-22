@@ -26,6 +26,9 @@ public record CitaResponse(
 		BigDecimal subtotal,
 		BigDecimal descuento,
 		BigDecimal total,
+		Boolean requiereConfirmacion,
+		LocalDateTime fechaConfirmacion,
+		String confirmadaPor,
 		LocalDateTime createdAt,
 		LocalDateTime updatedAt
 ) {

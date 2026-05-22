@@ -942,6 +942,8 @@ INASISTENCIA
 | `GET /api/citas/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 | `PUT /api/citas/{id}` | `ADMIN`, `ASISTENTE` |
 | `PATCH /api/citas/{id}/cancelar` | `ADMIN`, `ASISTENTE` |
+| `PATCH /api/citas/{id}/confirmar` | `ADMIN`, `ASISTENTE`, `DUENIO` |
+| `GET /api/citas/alertas-confirmacion` | `ADMIN`, `ASISTENTE` |
 
 **Resultado esperado:**
 
@@ -953,18 +955,62 @@ INASISTENCIA
 
 **Que se esta haciendo:** se agrega control previo de asistencia para reducir ausencias y mejorar la organizacion diaria.
 
-**Actividades:**
+**Archivos principales actualizados:**
+
+```text
+persistence/entity/Cita.java
+domain/dto/response/CitaResponse.java
+domain/repository/CitaRepository.java
+domain/service/CitaService.java
+web/CitaController.java
+```
+
+**Campos agregados en `Cita`:**
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `requiereConfirmacion` | `Boolean` | Indica si la cita aun debe ser confirmada. |
+| `fechaConfirmacion` | `LocalDateTime` | Fecha y hora en que se confirmo la cita. |
+| `confirmadaPor` | `String` | Usuario autenticado que realizo la confirmacion. |
+
+**Actividades implementadas:**
 
 - Agregar campos `requiereConfirmacion`, `fechaConfirmacion` y `confirmadaPor`.
 - Permitir confirmar cita desde el panel del asistente o duenio.
 - Generar alerta cuando una cita cercana aun no esta confirmada.
-- Definir regla de negocio: por ejemplo, alertar 24 horas antes si sigue `PROGRAMADA`.
+- Definir regla de negocio: alertar 24 horas antes por defecto si sigue `PROGRAMADA`.
+- Al crear o reprogramar una cita, queda con `requiereConfirmacion = true`.
+- Al confirmar una cita, cambia a estado `CONFIRMADA`.
+- Registrar automaticamente el usuario autenticado en `confirmadaPor`.
 
-**Endpoint sugerido:**
+**Reglas de negocio:**
+
+- Solo se pueden confirmar citas futuras.
+- No se pueden confirmar citas `CANCELADA`, `ATENDIDA` o `INASISTENCIA`.
+- Una cita confirmada deja de requerir confirmacion.
+- Las alertas muestran citas `PROGRAMADA` con `requiereConfirmacion = true`.
+- La ventana de alerta por defecto es de 24 horas, pero se puede ajustar con el parametro `horas`.
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `PATCH` | `/api/citas/{id}/confirmar` | Confirmar cita antes de la fecha programada. |
+| `GET` | `/api/citas/alertas-confirmacion` | Listar citas proximas sin confirmar. |
+
+**Ejemplo de uso para alertas:**
+
+```text
+GET /api/citas/alertas-confirmacion
+GET /api/citas/alertas-confirmacion?horas=48
+```
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `PATCH /api/citas/{id}/confirmar` | `ADMIN`, `ASISTENTE`, `DUENIO` |
+| `GET /api/citas/alertas-confirmacion` | `ADMIN`, `ASISTENTE` |
 
 **Resultado esperado:**
 

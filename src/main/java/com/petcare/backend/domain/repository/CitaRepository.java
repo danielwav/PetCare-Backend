@@ -48,4 +48,6 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			@Param("horaFin") LocalTime horaFin,
 			@Param("currentCitaId") Long currentCitaId
 	);
+
+	List<Cita> findByEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(EstadoCita estado);
 }

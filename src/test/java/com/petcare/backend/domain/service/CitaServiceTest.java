@@ -68,6 +68,8 @@ class CitaServiceTest {
 		assertThat(found.subtotal()).isEqualByComparingTo("130.00");
 		assertThat(found.descuento()).isEqualByComparingTo("10.00");
 		assertThat(found.total()).isEqualByComparingTo("120.00");
+		assertThat(found.requiereConfirmacion()).isTrue();
+		assertThat(found.fechaConfirmacion()).isNull();
 		assertThat(found.detallesCosto()).hasSize(2);
 		assertThat(updated.horaInicio()).isEqualTo(LocalTime.of(10, 0));
 		assertThat(updated.horaFin()).isEqualTo(LocalTime.of(10, 30));
@@ -117,6 +119,35 @@ class CitaServiceTest {
 				LocalTime.of(12, 0),
 				"Fuera de horario"
 		))).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	void confirmCitaAndRemoveFromConfirmationAlerts() {
+		TestData data = createBaseData();
+		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
+		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"));
+
+		List<CitaResponse> alertsBefore = citaService.findConfirmationAlerts(24 * 8);
+		CitaResponse confirmed = citaService.confirm(created.id(), "asistente@test.com");
+		List<CitaResponse> alertsAfter = citaService.findConfirmationAlerts(24 * 8);
+
+		assertThat(alertsBefore).extracting(CitaResponse::id).contains(created.id());
+		assertThat(confirmed.estado()).isEqualTo(EstadoCita.CONFIRMADA);
+		assertThat(confirmed.requiereConfirmacion()).isFalse();
+		assertThat(confirmed.fechaConfirmacion()).isNotNull();
+		assertThat(confirmed.confirmadaPor()).isEqualTo("asistente@test.com");
+		assertThat(alertsAfter).extracting(CitaResponse::id).doesNotContain(created.id());
+	}
+
+	@Test
+	void rejectConfirmationForCanceledCita() {
+		TestData data = createBaseData();
+		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
+		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"));
+		citaService.cancel(created.id());
+
+		assertThatThrownBy(() -> citaService.confirm(created.id(), "asistente@test.com"))
+				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private TestData createBaseData() {

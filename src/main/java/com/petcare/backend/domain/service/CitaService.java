@@ -68,6 +68,7 @@ public class CitaService {
 				.subtotal(BigDecimal.ZERO)
 				.descuento(BigDecimal.ZERO)
 				.total(BigDecimal.ZERO)
+				.requiereConfirmacion(true)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -118,6 +119,10 @@ public class CitaService {
 		cita.setHoraFin(horaFin);
 		cita.setDuracionMinutos(request.duracionMinutos());
 		cita.setMotivo(normalizeText(request.motivo()));
+		cita.setEstado(EstadoCita.PROGRAMADA);
+		cita.setRequiereConfirmacion(true);
+		cita.setFechaConfirmacion(null);
+		cita.setConfirmadaPor(null);
 		cita.setUpdatedAt(LocalDateTime.now());
 		replaceCostDetails(cita, request.servicios(), request.descuento());
 
@@ -134,6 +139,47 @@ public class CitaService {
 		cita.setEstado(EstadoCita.CANCELADA);
 		cita.setUpdatedAt(LocalDateTime.now());
 		return toResponse(citaRepository.save(cita));
+	}
+
+	@Transactional
+	public CitaResponse confirm(Long id, String confirmadaPor) {
+		Cita cita = findEntityById(id);
+		if (cita.getEstado() == EstadoCita.CANCELADA) {
+			throw new IllegalArgumentException("No se puede confirmar una cita cancelada.");
+		}
+		if (cita.getEstado() == EstadoCita.ATENDIDA || cita.getEstado() == EstadoCita.INASISTENCIA) {
+			throw new IllegalArgumentException("No se puede confirmar una cita cerrada.");
+		}
+		if (!LocalDateTime.of(cita.getFecha(), cita.getHoraInicio()).isAfter(LocalDateTime.now())) {
+			throw new IllegalArgumentException("No se puede confirmar una cita vencida.");
+		}
+
+		cita.setEstado(EstadoCita.CONFIRMADA);
+		cita.setRequiereConfirmacion(false);
+		cita.setFechaConfirmacion(LocalDateTime.now());
+		cita.setConfirmadaPor(normalizeText(confirmadaPor));
+		cita.setUpdatedAt(LocalDateTime.now());
+		return toResponse(citaRepository.save(cita));
+	}
+
+	@Transactional(readOnly = true)
+	public List<CitaResponse> findConfirmationAlerts(Integer horas) {
+		int hoursWindow = horas == null ? 24 : horas;
+		if (hoursWindow <= 0) {
+			throw new IllegalArgumentException("La ventana de alertas debe ser mayor a cero.");
+		}
+
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime limit = now.plusHours(hoursWindow);
+
+		return citaRepository.findByEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(EstadoCita.PROGRAMADA)
+				.stream()
+				.filter(cita -> {
+					LocalDateTime scheduledAt = LocalDateTime.of(cita.getFecha(), cita.getHoraInicio());
+					return !scheduledAt.isBefore(now) && !scheduledAt.isAfter(limit);
+				})
+				.map(this::toResponse)
+				.toList();
 	}
 
 	private void replaceCostDetails(
@@ -278,6 +324,9 @@ public class CitaService {
 				cita.getSubtotal(),
 				cita.getDescuento(),
 				cita.getTotal(),
+				cita.getRequiereConfirmacion(),
+				cita.getFechaConfirmacion(),
+				cita.getConfirmadaPor(),
 				cita.getCreatedAt(),
 				cita.getUpdatedAt()
 		);

@@ -80,6 +80,14 @@ public class Cita {
 	@Column(nullable = false, precision = 10, scale = 2)
 	private BigDecimal total;
 
+	@Column(nullable = false)
+	private Boolean requiereConfirmacion;
+
+	private LocalDateTime fechaConfirmacion;
+
+	@Column(length = 120)
+	private String confirmadaPor;
+
 	@Column(nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
