@@ -649,7 +649,7 @@ horarios_veterinarios
 
 **Nota sobre cruces de citas:**
 
-En este paso la disponibilidad se calcula desde horarios activos del veterinario. La validacion final contra citas ocupadas se completara en el Paso 7, cuando exista la entidad `Cita` y sus estados.
+En este paso la disponibilidad se calcula desde horarios activos del veterinario. Desde el Paso 7, la programacion de citas tambien valida cruces contra citas ya registradas.
 
 **Endpoints sugeridos:**
 
@@ -682,34 +682,189 @@ En este paso la disponibilidad se calcula desde horarios activos del veterinario
 
 **Que se esta haciendo:** se define el catalogo de servicios veterinarios y sus costos para calcular el costo total de cada cita.
 
-**Actividades:**
+**Archivos principales:**
+
+```text
+persistence/entity/Servicio.java
+persistence/entity/DetalleCostoCita.java
+domain/repository/ServicioRepository.java
+domain/repository/DetalleCostoCitaRepository.java
+domain/dto/request/ServicioRequest.java
+domain/dto/request/CalculoCostoCitaRequest.java
+domain/dto/request/CostoCitaServicioRequest.java
+domain/dto/response/ServicioResponse.java
+domain/dto/response/CalculoCostoCitaResponse.java
+domain/dto/response/DetalleCostoCitaResponse.java
+domain/service/ServicioService.java
+web/ServicioController.java
+```
+
+**Entidades creadas:**
+
+#### `Servicio`
+
+Representa el catalogo de servicios que ofrece la veterinaria.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador del servicio. |
+| `nombre` | `String` | Nombre unico del servicio. |
+| `descripcion` | `String` | Descripcion visible para administracion y agenda. |
+| `costoBase` | `BigDecimal` | Precio base del servicio. |
+| `active` | `Boolean` | Permite activar o desactivar el servicio sin eliminarlo. |
+| `createdAt` | `LocalDateTime` | Fecha de creacion. |
+| `updatedAt` | `LocalDateTime` | Fecha de ultima actualizacion. |
+
+#### `DetalleCostoCita`
+
+Representa el detalle economico de los servicios asociados a una cita.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador del detalle. |
+| `cita` | `Cita` | Cita a la que pertenece el detalle de costo. |
+| `servicio` | `Servicio` | Servicio usado en la cita. |
+| `nombreServicio` | `String` | Copia del nombre del servicio al momento de calcular. |
+| `costoUnitario` | `BigDecimal` | Costo unitario aplicado. |
+| `cantidad` | `Integer` | Cantidad del servicio. |
+| `subtotal` | `BigDecimal` | Costo antes de descuento. |
+| `descuento` | `BigDecimal` | Descuento aplicado al detalle o cita. |
+| `total` | `BigDecimal` | Total final. |
+| `createdAt` | `LocalDateTime` | Fecha de creacion del detalle. |
+
+**Actividades implementadas:**
 
 - Crear entidad `Servicio`.
 - Registrar nombre, descripcion, costo base y estado.
 - Permitir activar o desactivar servicios.
 - Crear entidad `DetalleCostoCita`.
-- Asociar uno o varios servicios a una cita.
-- Calcular subtotal, descuentos si aplican y costo total.
+- Preparar la asociacion de uno o varios servicios a una cita mediante `DetalleCostoCita`.
+- Calcular subtotal, descuento y costo total a partir de servicios activos.
+- Validar que no existan nombres de servicios duplicados.
+- Evitar calcular costos con servicios inactivos.
 
-**Endpoints sugeridos:**
+**Reglas de negocio:**
+
+- Solo `ADMIN` puede crear, editar, activar o desactivar servicios.
+- `ADMIN`, `ASISTENTE` y `VETERINARIO` pueden consultar servicios.
+- Por defecto `GET /api/servicios` devuelve solo servicios activos.
+- El descuento no puede ser mayor al subtotal calculado.
+- El costo se maneja con `BigDecimal` y dos decimales.
+- La relacion directa con `Cita` se completa en el Paso 7 mediante `@ManyToOne`.
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `POST` | `/api/servicios` | Crear servicio. |
-| `GET` | `/api/servicios` | Listar servicios activos. |
+| `GET` | `/api/servicios` | Listar servicios activos por defecto. Permite `search` y `active`. |
+| `GET` | `/api/servicios/{id}` | Obtener detalle de un servicio. |
 | `PUT` | `/api/servicios/{id}` | Actualizar servicio y costo. |
+| `PATCH` | `/api/servicios/{id}/activar` | Reactivar servicio desactivado. |
 | `DELETE` | `/api/servicios/{id}` | Desactivar servicio. |
+| `POST` | `/api/servicios/calcular-costo` | Calcular subtotal, descuento y total para una cita. |
+
+**Ejemplo de request para crear servicio:**
+
+```json
+{
+  "nombre": "Consulta general",
+  "descripcion": "Evaluacion clinica basica de la mascota.",
+  "costoBase": 50.00
+}
+```
+
+**Ejemplo de request para calcular costo:**
+
+```json
+{
+  "servicios": [
+    {
+      "servicioId": 1,
+      "cantidad": 1
+    },
+    {
+      "servicioId": 2,
+      "cantidad": 2
+    }
+  ],
+  "descuento": 10.00
+}
+```
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `POST /api/servicios` | `ADMIN` |
+| `GET /api/servicios` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/servicios/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/servicios/{id}` | `ADMIN` |
+| `PATCH /api/servicios/{id}/activar` | `ADMIN` |
+| `DELETE /api/servicios/{id}` | `ADMIN` |
+| `POST /api/servicios/calcular-costo` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 
 **Resultado esperado:**
 
 - Los costos quedan centralizados.
 - Cada cita puede calcular su costo total automaticamente.
+- El modulo de citas reutiliza `Servicio` y `DetalleCostoCita` sin duplicar la logica de costos.
 
 ### Paso 7: Programar citas veterinarias
 
 **Que se esta haciendo:** se implementa el flujo de agendamiento de citas entre mascota, duenio, veterinario y servicio.
 
-**Actividades:**
+**Archivos principales:**
+
+```text
+persistence/enums/EstadoCita.java
+persistence/entity/Cita.java
+persistence/entity/DetalleCostoCita.java
+domain/repository/CitaRepository.java
+domain/dto/request/CitaRequest.java
+domain/dto/response/CitaResponse.java
+domain/service/CitaService.java
+web/CitaController.java
+```
+
+**Entidades creadas o actualizadas:**
+
+#### `Cita`
+
+Representa una cita programada entre un duenio, una mascota, un veterinario y uno o varios servicios.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador de la cita. |
+| `duenio` | `Duenio` | Propietario asociado a la cita. |
+| `mascota` | `Mascota` | Mascota que recibira la atencion. |
+| `veterinario` | `Veterinario` | Veterinario asignado. |
+| `fecha` | `LocalDate` | Fecha programada. |
+| `horaInicio` | `LocalTime` | Hora de inicio. |
+| `horaFin` | `LocalTime` | Hora calculada segun la duracion. |
+| `duracionMinutos` | `Integer` | Duracion de la cita. |
+| `motivo` | `String` | Motivo de la cita. |
+| `estado` | `EstadoCita` | Estado actual de la cita. |
+| `subtotal` | `BigDecimal` | Suma de servicios antes de descuento. |
+| `descuento` | `BigDecimal` | Descuento aplicado. |
+| `total` | `BigDecimal` | Total final. |
+| `detallesCosto` | `List<DetalleCostoCita>` | Servicios asociados con cantidades y costos. |
+| `createdAt` | `LocalDateTime` | Fecha de creacion. |
+| `updatedAt` | `LocalDateTime` | Fecha de ultima actualizacion. |
+
+#### `EstadoCita`
+
+Define los estados disponibles para el ciclo de vida de una cita:
+
+```java
+PROGRAMADA,
+CONFIRMADA,
+CANCELADA,
+ATENDIDA,
+INASISTENCIA
+```
+
+**Actividades implementadas:**
 
 - Crear entidad `Cita`.
 - Relacionar cita con mascota, duenio, veterinario y servicios.
@@ -717,16 +872,76 @@ En este paso la disponibilidad se calcula desde horarios activos del veterinario
 - Validar fecha y hora futuras.
 - Calcular costo total al registrar o actualizar servicios.
 - Definir estado inicial `PROGRAMADA`.
+- Cancelar citas cambiando su estado a `CANCELADA`.
+- Listar citas con filtros por estado, fecha, duenio, mascota y veterinario.
 
-**Endpoints sugeridos:**
+**Reglas de negocio:**
+
+- Solo se pueden programar citas en fecha y hora futura.
+- La mascota debe pertenecer al duenio indicado.
+- Duenio, mascota, veterinario y servicios deben estar activos.
+- La cita debe encajar dentro del horario activo del veterinario.
+- No se permite crear o actualizar una cita si cruza con otra cita del mismo veterinario.
+- Las citas canceladas no bloquean disponibilidad.
+- Al crear una cita, el estado inicial es `PROGRAMADA`.
+- No se puede modificar una cita cancelada.
+- El total se calcula como `subtotal - descuento`.
+- El descuento no puede ser mayor al subtotal.
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `POST` | `/api/citas` | Programar cita. |
-| `GET` | `/api/citas` | Listar citas con filtros. |
+| `GET` | `/api/citas` | Listar citas con filtros por estado, fecha, duenio, mascota y veterinario. |
 | `GET` | `/api/citas/{id}` | Obtener detalle de cita. |
 | `PUT` | `/api/citas/{id}` | Reprogramar o actualizar cita. |
 | `PATCH` | `/api/citas/{id}/cancelar` | Cancelar cita. |
+
+**Ejemplo de request para programar cita:**
+
+```json
+{
+  "duenioId": 1,
+  "mascotaId": 1,
+  "veterinarioId": 1,
+  "fecha": "2026-05-25",
+  "horaInicio": "09:00:00",
+  "duracionMinutos": 30,
+  "motivo": "Consulta preventiva",
+  "servicios": [
+    {
+      "servicioId": 1,
+      "cantidad": 1
+    },
+    {
+      "servicioId": 2,
+      "cantidad": 1
+    }
+  ],
+  "descuento": 10.00
+}
+```
+
+**Filtros disponibles en `GET /api/citas`:**
+
+| Parametro | Ejemplo | Descripcion |
+| --- | --- | --- |
+| `estado` | `PROGRAMADA` | Filtra por estado de cita. |
+| `fecha` | `2026-05-25` | Filtra por fecha exacta. |
+| `duenioId` | `1` | Filtra por duenio. |
+| `mascotaId` | `1` | Filtra por mascota. |
+| `veterinarioId` | `1` | Filtra por veterinario. |
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `POST /api/citas` | `ADMIN`, `ASISTENTE` |
+| `GET /api/citas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/citas/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/citas/{id}` | `ADMIN`, `ASISTENTE` |
+| `PATCH /api/citas/{id}/cancelar` | `ADMIN`, `ASISTENTE` |
 
 **Resultado esperado:**
 
