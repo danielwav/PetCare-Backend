@@ -1109,21 +1109,85 @@ Representa el registro formal de una cita a la que el duenio y la mascota no asi
 
 **Que se esta haciendo:** el veterinario documenta la atencion medica durante o despues de la cita.
 
-**Actividades:**
+**Archivos principales:**
+
+```text
+persistence/entity/AtencionClinica.java
+domain/repository/AtencionClinicaRepository.java
+domain/dto/request/AtencionClinicaRequest.java
+domain/dto/response/AtencionClinicaResponse.java
+domain/dto/response/HistoriaClinicaResponse.java
+domain/service/AtencionClinicaService.java
+web/AtencionClinicaController.java
+```
+
+**Entidad creada:**
+
+#### `AtencionClinica`
+
+Representa el registro medico generado cuando una cita es atendida.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador de la atencion. |
+| `cita` | `Cita` | Cita atendida. Es unica por cita. |
+| `mascota` | `Mascota` | Mascota atendida. |
+| `veterinario` | `Veterinario` | Veterinario responsable. |
+| `motivo` | `String` | Motivo clinico de la atencion. |
+| `diagnostico` | `String` | Diagnostico registrado. |
+| `tratamiento` | `String` | Tratamiento indicado. |
+| `recomendaciones` | `String` | Recomendaciones para el duenio. |
+| `observacionesClinicas` | `String` | Observaciones medicas adicionales. |
+| `notasInternas` | `String` | Notas internas visibles para el equipo. |
+| `fechaRegistro` | `LocalDateTime` | Fecha y hora del registro clinico. |
+
+**Actividades implementadas:**
 
 - Crear entidad `AtencionClinica`.
 - Relacionar atencion con cita e historia clinica.
 - Registrar motivo, diagnostico, tratamiento, recomendaciones y observaciones clinicas.
 - Cambiar estado de cita a `ATENDIDA`.
 - Permitir adjuntar notas internas si se requiere.
+- Evitar duplicar atenciones para una misma cita.
+- Consultar historia clinica completa por mascota.
 
-**Endpoints sugeridos:**
+**Reglas de negocio:**
+
+- Solo se puede registrar atencion para citas `PROGRAMADA` o `CONFIRMADA`.
+- No se puede registrar atencion antes de la fecha y hora de la cita.
+- Una cita solo puede tener una atencion clinica.
+- Al registrar atencion, la cita cambia a `ATENDIDA`.
+- Al registrar atencion, la cita deja de requerir confirmacion.
+- La historia clinica se arma desde atenciones clinicas y controles mensuales de la mascota.
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `POST` | `/api/citas/{id}/atencion` | Registrar atencion clinica. |
 | `GET` | `/api/mascotas/{id}/historia-clinica` | Consultar historia clinica completa. |
 | `GET` | `/api/atenciones/{id}` | Consultar detalle de una atencion. |
+
+**Ejemplo de request para registrar atencion:**
+
+```json
+{
+  "motivo": "Vomitos y falta de apetito",
+  "diagnostico": "Gastritis leve",
+  "tratamiento": "Dieta blanda y medicacion por 3 dias",
+  "recomendaciones": "Retornar si los sintomas continuan",
+  "observacionesClinicas": "Paciente estable",
+  "notasInternas": "Seguimiento telefonico recomendado"
+}
+```
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `POST /api/citas/{id}/atencion` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/mascotas/{id}/historia-clinica` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/atenciones/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 
 **Resultado esperado:**
 
@@ -1134,21 +1198,85 @@ Representa el registro formal de una cita a la que el duenio y la mascota no asi
 
 **Que se esta haciendo:** se registra el seguimiento periodico de la mascota para evaluar su evolucion.
 
-**Actividades:**
+**Archivos principales:**
+
+```text
+persistence/entity/ControlMensualMascota.java
+domain/repository/ControlMensualMascotaRepository.java
+domain/dto/request/ControlMensualMascotaRequest.java
+domain/dto/response/ControlMensualMascotaResponse.java
+domain/service/ControlMensualMascotaService.java
+web/ControlMensualMascotaController.java
+```
+
+**Entidad creada:**
+
+#### `ControlMensualMascota`
+
+Representa el seguimiento periodico de evolucion de una mascota.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador del control mensual. |
+| `mascota` | `Mascota` | Mascota controlada. |
+| `veterinario` | `Veterinario` | Veterinario que registra el control. |
+| `fechaControl` | `LocalDate` | Fecha del control. |
+| `anio` | `Integer` | Anio del control. |
+| `mes` | `Integer` | Mes del control. |
+| `pesoKg` | `BigDecimal` | Peso registrado. |
+| `alimentacion` | `String` | Observacion sobre alimentacion. |
+| `observaciones` | `String` | Observaciones generales. |
+| `recomendaciones` | `String` | Recomendaciones del veterinario. |
+| `createdAt` | `LocalDateTime` | Fecha de creacion. |
+| `updatedAt` | `LocalDateTime` | Fecha de ultima actualizacion. |
+
+**Actividades implementadas:**
 
 - Crear entidad `ControlMensualMascota`.
-- Registrar mes, anio, peso, talla, condicion corporal y observaciones.
+- Registrar mes, anio, peso, alimentacion, recomendaciones y observaciones.
 - Relacionar control con mascota y veterinario.
 - Permitir consultar controles por mascota.
 - Validar un control por mascota por mes, salvo que el negocio permita varios.
+- Permitir actualizar un control mensual.
 
-**Endpoints sugeridos:**
+**Reglas de negocio:**
+
+- La mascota debe estar activa.
+- El veterinario debe estar activo.
+- No se permite registrar mas de un control para la misma mascota en el mismo mes y anio.
+- La fecha del control no puede ser futura.
+- Los controles mensuales aparecen dentro de la historia clinica de la mascota.
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `POST` | `/api/mascotas/{id}/controles-mensuales` | Registrar control mensual. |
 | `GET` | `/api/mascotas/{id}/controles-mensuales` | Listar controles mensuales. |
+| `GET` | `/api/controles-mensuales/{id}` | Consultar detalle de control mensual. |
 | `PUT` | `/api/controles-mensuales/{id}` | Actualizar control mensual. |
+
+**Ejemplo de request para control mensual:**
+
+```json
+{
+  "veterinarioId": 1,
+  "fechaControl": "2026-05-20",
+  "pesoKg": 13.10,
+  "alimentacion": "Alimentacion balanceada",
+  "observaciones": "Buen estado general",
+  "recomendaciones": "Mantener rutina de actividad"
+}
+```
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `POST /api/mascotas/{id}/controles-mensuales` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/mascotas/{id}/controles-mensuales` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/controles-mensuales/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/controles-mensuales/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 
 **Resultado esperado:**
 
