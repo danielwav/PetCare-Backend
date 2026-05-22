@@ -861,7 +861,7 @@ PROGRAMADA,
 CONFIRMADA,
 CANCELADA,
 ATENDIDA,
-INASISTENCIA
+NO_ASISTIO
 ```
 
 **Actividades implementadas:**
@@ -986,7 +986,7 @@ web/CitaController.java
 **Reglas de negocio:**
 
 - Solo se pueden confirmar citas futuras.
-- No se pueden confirmar citas `CANCELADA`, `ATENDIDA` o `INASISTENCIA`.
+- No se pueden confirmar citas `CANCELADA`, `ATENDIDA` o `NO_ASISTIO`.
 - Una cita confirmada deja de requerir confirmacion.
 - Las alertas muestran citas `PROGRAMADA` con `requiereConfirmacion = true`.
 - La ventana de alerta por defecto es de 24 horas, pero se puede ajustar con el parametro `horas`.
@@ -1021,19 +1021,84 @@ GET /api/citas/alertas-confirmacion?horas=48
 
 **Que se esta haciendo:** se registra cuando el duenio y la mascota no asisten a una cita programada o confirmada.
 
-**Actividades:**
+**Archivos principales:**
+
+```text
+persistence/entity/Inasistencia.java
+persistence/enums/EstadoCita.java
+domain/repository/InasistenciaRepository.java
+domain/dto/request/InasistenciaRequest.java
+domain/dto/response/InasistenciaResponse.java
+domain/service/InasistenciaService.java
+web/InasistenciaController.java
+```
+
+**Entidad creada:**
+
+#### `Inasistencia`
+
+Representa el registro formal de una cita a la que el duenio y la mascota no asistieron.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador de la inasistencia. |
+| `cita` | `Cita` | Cita marcada como no asistida. Es unica por cita. |
+| `duenio` | `Duenio` | Duenio asociado a la cita. |
+| `mascota` | `Mascota` | Mascota asociada a la cita. |
+| `observacion` | `String` | Motivo o detalle registrado por el personal. |
+| `registradoPor` | `String` | Usuario autenticado que registra la inasistencia. |
+| `fechaRegistro` | `LocalDateTime` | Fecha y hora del registro. |
+
+**Actividades implementadas:**
 
 - Crear entidad `Inasistencia`.
 - Relacionar inasistencia con `Cita`, `Duenio` y `Mascota`.
 - Cambiar estado de cita a `NO_ASISTIO`.
 - Guardar fecha, observacion y usuario que registra.
 - Permitir reportes de inasistencias por duenio o por rango de fechas.
+- Evitar duplicar inasistencia para una misma cita.
+- Bloquear inasistencias antes de la fecha y hora de la cita.
 
-**Endpoint sugerido:**
+**Reglas de negocio:**
+
+- Solo se puede registrar inasistencia para citas `PROGRAMADA` o `CONFIRMADA`.
+- No se puede registrar inasistencia para citas futuras.
+- Una cita solo puede tener una inasistencia.
+- Al registrar inasistencia, la cita cambia a estado `NO_ASISTIO`.
+- Al registrar inasistencia, la cita deja de requerir confirmacion.
+- El usuario autenticado queda guardado en `registradoPor`.
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
 | `PATCH` | `/api/citas/{id}/inasistencia` | Registrar inasistencia de una cita. |
+| `GET` | `/api/inasistencias` | Listar inasistencias con filtros. |
+| `GET` | `/api/inasistencias/{id}` | Obtener detalle de una inasistencia. |
+
+**Ejemplo de request para registrar inasistencia:**
+
+```json
+{
+  "observacion": "El duenio no se presento a la cita programada."
+}
+```
+
+**Filtros disponibles en `GET /api/inasistencias`:**
+
+| Parametro | Ejemplo | Descripcion |
+| --- | --- | --- |
+| `duenioId` | `1` | Filtra por duenio. |
+| `fechaInicio` | `2026-05-01` | Fecha inicial de registro. |
+| `fechaFin` | `2026-05-31` | Fecha final de registro. |
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `PATCH /api/citas/{id}/inasistencia` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/inasistencias` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/inasistencias/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 
 **Resultado esperado:**
 

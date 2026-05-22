@@ -147,7 +147,7 @@ public class CitaService {
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
 			throw new IllegalArgumentException("No se puede confirmar una cita cancelada.");
 		}
-		if (cita.getEstado() == EstadoCita.ATENDIDA || cita.getEstado() == EstadoCita.INASISTENCIA) {
+		if (cita.getEstado() == EstadoCita.ATENDIDA || cita.getEstado() == EstadoCita.NO_ASISTIO) {
 			throw new IllegalArgumentException("No se puede confirmar una cita cerrada.");
 		}
 		if (!LocalDateTime.of(cita.getFecha(), cita.getHoraInicio()).isAfter(LocalDateTime.now())) {
