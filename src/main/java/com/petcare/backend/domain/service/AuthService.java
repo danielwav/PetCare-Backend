@@ -1,14 +1,18 @@
 package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.LoginRequest;
+import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
+import com.petcare.backend.domain.repository.DuenioRepository;
 import com.petcare.backend.domain.repository.RolRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
+import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
+import com.petcare.backend.security.JwtProperties;
 import com.petcare.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -32,10 +36,13 @@ public class AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final RolRepository rolRepository;
 	private final UsuarioRepository usuarioRepository;
+	private final DuenioRepository duenioRepository;
+	private final JwtProperties jwtProperties;
 
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
-		if (usuarioRepository.existsByEmail(request.email())) {
+		String email = request.email().toLowerCase();
+		if (usuarioRepository.existsByEmail(email)) {
 			throw new IllegalArgumentException("El correo ya esta registrado.");
 		}
 
@@ -45,7 +52,7 @@ public class AuthService {
 
 		Usuario usuario = Usuario.builder()
 				.fullName(request.fullName())
-				.email(request.email().toLowerCase())
+				.email(email)
 				.password(passwordEncoder.encode(request.password()))
 				.active(true)
 				.createdAt(LocalDateTime.now())
@@ -53,8 +60,8 @@ public class AuthService {
 				.build();
 
 		Usuario savedUser = usuarioRepository.save(usuario);
-		String token = jwtService.generateToken(savedUser.getEmail());
-		return new AuthResponse(token, toUserResponse(savedUser));
+		linkExistingDuenioIfNeeded(savedUser, roleName);
+		return buildAuthResponse(savedUser);
 	}
 
 	public AuthResponse login(LoginRequest request) {
@@ -64,8 +71,18 @@ public class AuthService {
 
 		String email = authentication.getName();
 		Usuario usuario = findByEmail(email);
-		String token = jwtService.generateToken(email);
-		return new AuthResponse(token, toUserResponse(usuario));
+		return buildAuthResponse(usuario);
+	}
+
+	public AuthResponse refresh(RefreshTokenRequest request) {
+		if (!jwtService.isValidRefreshToken(request.refreshToken())) {
+			throw new IllegalArgumentException("Refresh token invalido o expirado.");
+		}
+		Usuario usuario = findByEmail(jwtService.extractSubject(request.refreshToken()));
+		if (!usuario.getActive()) {
+			throw new UsernameNotFoundException("Usuario inactivo.");
+		}
+		return buildAuthResponse(usuario);
 	}
 
 	public UserResponse me(String email) {
@@ -75,6 +92,24 @@ public class AuthService {
 	private Usuario findByEmail(String email) {
 		return usuarioRepository.findByEmail(email.toLowerCase())
 				.orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado."));
+	}
+
+	private void linkExistingDuenioIfNeeded(Usuario usuario, RoleName roleName) {
+		if (roleName != RoleName.ROLE_DUENIO) {
+			return;
+		}
+
+		duenioRepository.findByEmail(usuario.getEmail())
+				.ifPresent(duenio -> linkDuenioToUser(duenio, usuario));
+	}
+
+	private void linkDuenioToUser(Duenio duenio, Usuario usuario) {
+		if (duenio.getUsuario() != null) {
+			throw new IllegalArgumentException("El duenio ya esta relacionado a otro usuario.");
+		}
+		duenio.setUsuario(usuario);
+		duenio.setUpdatedAt(LocalDateTime.now());
+		duenioRepository.save(duenio);
 	}
 
 	private UserResponse toUserResponse(Usuario usuario) {
@@ -88,6 +123,17 @@ public class AuthService {
 				usuario.getEmail(),
 				usuario.getActive(),
 				roles
+		);
+	}
+
+	private AuthResponse buildAuthResponse(Usuario usuario) {
+		String accessToken = jwtService.generateAccessToken(usuario.getEmail());
+		String refreshToken = jwtService.generateRefreshToken(usuario.getEmail());
+		return new AuthResponse(
+				accessToken,
+				refreshToken,
+				jwtProperties.accessExpirationMs() / 1000,
+				toUserResponse(usuario)
 		);
 	}
 }

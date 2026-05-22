@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,23 +36,39 @@ public class DuenioController {
 	}
 
 	@GetMapping
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<DuenioResponse> findAll(
 			@RequestParam(required = false) String search,
-			@RequestParam(required = false) Boolean active
+			@RequestParam(required = false) Boolean active,
+			Authentication authentication
 	) {
+		if (isDuenioOnly(authentication)) {
+			return List.of(duenioService.findOwn(authentication.getName()));
+		}
 		return duenioService.findAll(search, active);
 	}
 
+	@GetMapping("/me")
+	@PreAuthorize("hasRole('DUENIO')")
+	public DuenioResponse findMe(Authentication authentication) {
+		return duenioService.findOwn(authentication.getName());
+	}
+
 	@GetMapping("/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public DuenioResponse findById(@PathVariable Long id) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
+	public DuenioResponse findById(@PathVariable Long id, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return duenioService.findOwnById(id, authentication.getName());
+		}
 		return duenioService.findById(id);
 	}
 
 	@PutMapping("/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
-	public DuenioResponse update(@PathVariable Long id, @Valid @RequestBody DuenioRequest request) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public DuenioResponse update(@PathVariable Long id, @Valid @RequestBody DuenioRequest request, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return duenioService.updateOwn(id, request, authentication.getName());
+		}
 		return duenioService.update(id, request);
 	}
 
@@ -60,5 +77,17 @@ public class DuenioController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public void deactivate(@PathVariable Long id) {
 		duenioService.deactivate(id);
+	}
+
+	private boolean isDuenioOnly(Authentication authentication) {
+		return hasRole(authentication, "ROLE_DUENIO")
+				&& !hasRole(authentication, "ROLE_ADMIN")
+				&& !hasRole(authentication, "ROLE_ASISTENTE")
+				&& !hasRole(authentication, "ROLE_VETERINARIO");
+	}
+
+	private boolean hasRole(Authentication authentication, String role) {
+		return authentication != null && authentication.getAuthorities().stream()
+				.anyMatch(authority -> authority.getAuthority().equals(role));
 	}
 }

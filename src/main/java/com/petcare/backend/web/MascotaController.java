@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,24 +35,34 @@ public class MascotaController {
 	}
 
 	@GetMapping("/api/mascotas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<MascotaResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Long duenioId,
-			@RequestParam(required = false) Boolean active
+			@RequestParam(required = false) Boolean active,
+			Authentication authentication
 	) {
+		if (isDuenioOnly(authentication)) {
+			return mascotaService.findAllForDuenio(authentication.getName(), search, active);
+		}
 		return mascotaService.findAll(search, duenioId, active);
 	}
 
 	@GetMapping("/api/duenios/{duenioId}/mascotas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public List<MascotaResponse> findByDuenio(@PathVariable Long duenioId) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
+	public List<MascotaResponse> findByDuenio(@PathVariable Long duenioId, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return mascotaService.findByDuenioForDuenio(authentication.getName(), duenioId);
+		}
 		return mascotaService.findByDuenio(duenioId);
 	}
 
 	@GetMapping("/api/mascotas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public MascotaResponse findById(@PathVariable Long id) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
+	public MascotaResponse findById(@PathVariable Long id, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return mascotaService.findByIdForDuenio(id, authentication.getName());
+		}
 		return mascotaService.findById(id);
 	}
 
@@ -66,5 +77,17 @@ public class MascotaController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public void deactivate(@PathVariable Long id) {
 		mascotaService.deactivate(id);
+	}
+
+	private boolean isDuenioOnly(Authentication authentication) {
+		return hasRole(authentication, "ROLE_DUENIO")
+				&& !hasRole(authentication, "ROLE_ADMIN")
+				&& !hasRole(authentication, "ROLE_ASISTENTE")
+				&& !hasRole(authentication, "ROLE_VETERINARIO");
+	}
+
+	private boolean hasRole(Authentication authentication, String role) {
+		return authentication != null && authentication.getAuthorities().stream()
+				.anyMatch(authority -> authority.getAuthority().equals(role));
 	}
 }

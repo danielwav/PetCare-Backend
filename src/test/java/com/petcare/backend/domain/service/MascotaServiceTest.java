@@ -2,12 +2,15 @@ package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.request.MascotaRequest;
+import com.petcare.backend.domain.dto.request.RegisterRequest;
+import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
 import com.petcare.backend.domain.dto.response.MascotaResponse;
 import com.petcare.backend.persistence.enums.SexoMascota;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -25,6 +28,9 @@ class MascotaServiceTest {
 
 	@Autowired
 	private DuenioService duenioService;
+
+	@Autowired
+	private AuthService authService;
 
 	@Autowired
 	private MascotaService mascotaService;
@@ -63,6 +69,7 @@ class MascotaServiceTest {
 
 		assertThat(found.duenioId()).isEqualTo(duenio.id());
 		assertThat(found.nombre()).isEqualTo("Luna");
+		assertThat(found.edadAnios()).isEqualTo(java.time.Period.between(LocalDate.of(2022, 5, 10), LocalDate.now()).getYears());
 		assertThat(updated.raza()).isEqualTo("Labrador Retriever");
 		assertThat(updated.pesoKg()).isEqualByComparingTo("19.20");
 		assertThat(inactive.active()).isFalse();
@@ -123,15 +130,54 @@ class MascotaServiceTest {
 		))).isInstanceOf(IllegalArgumentException.class);
 	}
 
+	@Test
+	void duenioCanOnlyConsultOwnMascotas() {
+		authService.register(new RegisterRequest("Admin", "admin.mascota@test.com", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.mascota@test.com", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.mascota@test.com", "secret123"));
+		DuenioResponse owner = createDuenio("71000005", "owner.pet@test.com", ownerUser.user().id());
+		DuenioResponse otherOwner = createDuenio("71000006", "other.pet@test.com", otherUser.user().id());
+		MascotaResponse ownPet = createMascota(owner.id(), "Lola");
+		MascotaResponse otherPet = createMascota(otherOwner.id(), "Toby");
+
+		List<MascotaResponse> ownPets = mascotaService.findAllForDuenio(ownerUser.user().email(), null, true);
+		MascotaResponse ownPetById = mascotaService.findByIdForDuenio(ownPet.id(), ownerUser.user().email());
+
+		assertThat(ownPets).extracting(MascotaResponse::id).containsExactly(ownPet.id());
+		assertThat(ownPetById.nombre()).isEqualTo("Lola");
+		assertThatThrownBy(() -> mascotaService.findByIdForDuenio(otherPet.id(), ownerUser.user().email()))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> mascotaService.findByDuenioForDuenio(ownerUser.user().email(), otherOwner.id()))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
 	private DuenioResponse createDuenio(String documento, String email) {
+		return createDuenio(documento, email, null);
+	}
+
+	private DuenioResponse createDuenio(String documento, String email, Long usuarioId) {
 		return duenioService.create(new DuenioRequest(
-				null,
+				usuarioId,
 				"Nombre",
 				"Apellido",
 				"DNI",
 				documento,
 				"999555666",
 				email,
+				null
+		));
+	}
+
+	private MascotaResponse createMascota(Long duenioId, String nombre) {
+		return mascotaService.create(new MascotaRequest(
+				duenioId,
+				nombre,
+				"Perro",
+				"Mestizo",
+				SexoMascota.HEMBRA,
+				LocalDate.now().minusYears(1),
+				null,
+				new BigDecimal("8.50"),
 				null
 		));
 	}

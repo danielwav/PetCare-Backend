@@ -41,6 +41,27 @@ Health check:
 GET /api/health
 ```
 
+Respuesta esperada cuando la aplicacion y la base de datos estan disponibles:
+
+```json
+{
+  "status": "UP",
+  "database": "UP"
+}
+```
+
+Este endpoint esta pensado para monitoreo, balanceadores o plataformas de despliegue.
+
+## Disponibilidad 99%
+
+El backend queda preparado para monitoreo con `GET /api/health`, pero el 99% real se garantiza en infraestructura:
+
+- Ejecutar la aplicacion en un servicio con reinicio automatico.
+- Usar una base de datos administrada o respaldada.
+- Configurar monitoreo sobre `/api/health`.
+- Mantener backups y restauracion probada.
+- Separar variables por ambiente: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`.
+
 ## Swagger / OpenAPI
 
 Con la aplicacion levantada, la documentacion de la API esta disponible en:

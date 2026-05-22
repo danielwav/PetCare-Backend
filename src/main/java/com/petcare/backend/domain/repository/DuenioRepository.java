@@ -20,6 +20,8 @@ public interface DuenioRepository extends JpaRepository<Duenio, Long> {
 
 	Optional<Duenio> findByUsuarioId(Long usuarioId);
 
+	Optional<Duenio> findByUsuarioEmail(String email);
+
 	@Query("""
 			select d from Duenio d
 			where (:active is null or d.active = :active)

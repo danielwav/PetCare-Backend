@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -80,8 +81,11 @@ public class VacunaController {
 	}
 
 	@GetMapping("/api/mascotas/{id}/vacunas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public List<VacunaMascotaResponse> findByMascota(@PathVariable Long id) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
+	public List<VacunaMascotaResponse> findByMascota(@PathVariable Long id, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return vacunaService.findByMascotaForDuenio(id, authentication.getName());
+		}
 		return vacunaService.findByMascota(id);
 	}
 
@@ -95,5 +99,17 @@ public class VacunaController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<VacunaMascotaResponse> findAlerts(@RequestParam(required = false) Integer dias) {
 		return vacunaService.findAlerts(dias);
+	}
+
+	private boolean isDuenioOnly(Authentication authentication) {
+		return hasRole(authentication, "ROLE_DUENIO")
+				&& !hasRole(authentication, "ROLE_ADMIN")
+				&& !hasRole(authentication, "ROLE_ASISTENTE")
+				&& !hasRole(authentication, "ROLE_VETERINARIO");
+	}
+
+	private boolean hasRole(Authentication authentication, String role) {
+		return authentication != null && authentication.getAuthorities().stream()
+				.anyMatch(authority -> authority.getAuthority().equals(role));
 	}
 }

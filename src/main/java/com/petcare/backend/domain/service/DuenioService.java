@@ -6,6 +6,7 @@ import com.petcare.backend.domain.repository.DuenioRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Usuario;
+import com.petcare.backend.persistence.enums.RoleName;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,13 +21,14 @@ public class DuenioService {
 
 	private final DuenioRepository duenioRepository;
 	private final UsuarioRepository usuarioRepository;
+	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
 	public DuenioResponse create(DuenioRequest request) {
 		validateUniqueEmail(request.email(), null);
 		validateUniqueDocument(request.numeroDocumento(), null);
 
-		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
+		Usuario usuario = resolveUsuarioForCreate(request);
 		if (usuario != null && duenioRepository.findByUsuarioId(usuario.getId()).isPresent()) {
 			throw new IllegalArgumentException("El usuario ya esta relacionado a un duenio.");
 		}
@@ -62,6 +64,16 @@ public class DuenioService {
 		return toResponse(findEntityById(id));
 	}
 
+	@Transactional(readOnly = true)
+	public DuenioResponse findOwn(String email) {
+		return toResponse(authenticatedDuenioService.findByAuthenticatedEmail(email));
+	}
+
+	@Transactional(readOnly = true)
+	public DuenioResponse findOwnById(Long id, String email) {
+		return toResponse(authenticatedDuenioService.validateOwnDuenio(email, id));
+	}
+
 	@Transactional
 	public DuenioResponse update(Long id, DuenioRequest request) {
 		Duenio duenio = findEntityById(id);
@@ -79,6 +91,29 @@ public class DuenioService {
 		}
 
 		duenio.setUsuario(usuario);
+		duenio.setNombres(normalizeText(request.nombres()));
+		duenio.setApellidos(normalizeText(request.apellidos()));
+		duenio.setTipoDocumento(normalizeText(request.tipoDocumento()));
+		duenio.setNumeroDocumento(request.numeroDocumento().trim());
+		duenio.setTelefono(request.telefono().trim());
+		duenio.setEmail(normalizeEmail(request.email()));
+		duenio.setDireccion(normalizeNullableText(request.direccion()));
+		duenio.setUpdatedAt(LocalDateTime.now());
+
+		return toResponse(duenioRepository.save(duenio));
+	}
+
+	@Transactional
+	public DuenioResponse updateOwn(Long id, DuenioRequest request, String email) {
+		authenticatedDuenioService.validateOwnDuenio(email, id);
+		if (request.usuarioId() != null) {
+			throw new IllegalArgumentException("No se puede cambiar el usuario vinculado desde el perfil de duenio.");
+		}
+		Duenio duenio = findEntityById(id);
+
+		validateUniqueEmail(request.email(), id);
+		validateUniqueDocument(request.numeroDocumento(), id);
+
 		duenio.setNombres(normalizeText(request.nombres()));
 		duenio.setApellidos(normalizeText(request.apellidos()));
 		duenio.setTipoDocumento(normalizeText(request.tipoDocumento()));
@@ -111,6 +146,22 @@ public class DuenioService {
 
 		return usuarioRepository.findById(usuarioId)
 				.orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado."));
+	}
+
+	private Usuario resolveUsuarioForCreate(DuenioRequest request) {
+		Usuario explicitUser = findUsuarioIfPresent(request.usuarioId());
+		if (explicitUser != null) {
+			return explicitUser;
+		}
+
+		return usuarioRepository.findByEmail(normalizeEmail(request.email()))
+				.filter(this::isDuenioUser)
+				.orElse(null);
+	}
+
+	private boolean isDuenioUser(Usuario usuario) {
+		return usuario.getRoles().stream()
+				.anyMatch(role -> role.getName() == RoleName.ROLE_DUENIO);
 	}
 
 	private void validateUniqueEmail(String email, Long currentId) {

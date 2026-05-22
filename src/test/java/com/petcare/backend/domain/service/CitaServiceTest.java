@@ -5,8 +5,10 @@ import com.petcare.backend.domain.dto.request.CostoCitaServicioRequest;
 import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.request.HorarioVeterinarioRequest;
 import com.petcare.backend.domain.dto.request.MascotaRequest;
+import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.request.ServicioRequest;
 import com.petcare.backend.domain.dto.request.VeterinarioRequest;
+import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.CitaResponse;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
 import com.petcare.backend.domain.dto.response.MascotaResponse;
@@ -17,6 +19,7 @@ import com.petcare.backend.persistence.enums.SexoMascota;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -36,6 +39,9 @@ class CitaServiceTest {
 
 	@Autowired
 	private CitaService citaService;
+
+	@Autowired
+	private AuthService authService;
 
 	@Autowired
 	private DuenioService duenioService;
@@ -150,20 +156,69 @@ class CitaServiceTest {
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
+	@Test
+	void duenioCanOnlyConsultAndConfirmOwnCitas() {
+		authService.register(new RegisterRequest("Admin", "admin.cita@test.com", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.cita@test.com", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.cita@test.com", "secret123"));
+		TestData ownerData = createBaseData("12345670", "owner.cita.profile@test.com", ownerUser.user().id(), "Lola", "CMVP-010", "vet10@test.com", "Consulta owner");
+		TestData otherData = createBaseData("12345671", "other.cita.profile@test.com", otherUser.user().id(), "Toby", "CMVP-011", "vet11@test.com", "Consulta other");
+		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
+		CitaResponse ownCita = citaService.createAsDuenio(
+				baseCitaRequest(ownerData, nextMonday, LocalTime.of(9, 0), "Control propio"),
+				ownerUser.user().email()
+		);
+		CitaResponse cancelableCita = citaService.createAsDuenio(
+				baseCitaRequest(ownerData, nextMonday, LocalTime.of(9, 30), "Control cancelable"),
+				ownerUser.user().email()
+		);
+		CitaResponse otherCita = citaService.create(baseCitaRequest(otherData, nextMonday, LocalTime.of(9, 0), "Control ajeno"));
+
+		List<CitaResponse> ownCitas = citaService.findAllForDuenio(ownerUser.user().email(), null, nextMonday, null, null);
+		CitaResponse confirmed = citaService.confirmAsDuenio(ownCita.id(), ownerUser.user().email());
+		CitaResponse canceled = citaService.cancelAsDuenio(cancelableCita.id(), ownerUser.user().email());
+
+		assertThat(ownCitas).extracting(CitaResponse::id).containsExactly(ownCita.id(), cancelableCita.id());
+		assertThat(confirmed.estado()).isEqualTo(EstadoCita.CONFIRMADA);
+		assertThat(canceled.estado()).isEqualTo(EstadoCita.CANCELADA);
+		assertThatThrownBy(() -> citaService.createAsDuenio(
+				baseCitaRequest(otherData, nextMonday, LocalTime.of(9, 30), "Control ajeno"),
+				ownerUser.user().email()
+		)).isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> citaService.findByIdForDuenio(otherCita.id(), ownerUser.user().email()))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> citaService.cancelAsDuenio(otherCita.id(), ownerUser.user().email()))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> citaService.confirmAsDuenio(otherCita.id(), ownerUser.user().email()))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
 	private TestData createBaseData() {
+		return createBaseData("12345678", "daniel@test.com", null, "Firulais", "CMVP-001", "ana.vet@test.com", "Consulta general");
+	}
+
+	private TestData createBaseData(
+			String documento,
+			String duenioEmail,
+			Long usuarioId,
+			String mascotaNombre,
+			String numeroColegiatura,
+			String veterinarioEmail,
+			String servicioNombre
+	) {
 		DuenioResponse duenio = duenioService.create(new DuenioRequest(
-				null,
+				usuarioId,
 				"Daniel",
 				"Torres",
 				"DNI",
-				"12345678",
+				documento,
 				"999888777",
-				"daniel@test.com",
+				duenioEmail,
 				"Av. Siempre Viva 123"
 		));
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
-				"Firulais",
+				mascotaNombre,
 				"Perro",
 				"Mestizo",
 				SexoMascota.MACHO,
@@ -176,10 +231,10 @@ class CitaServiceTest {
 				null,
 				"Ana",
 				"Salas",
-				"CMVP-001",
+				numeroColegiatura,
 				"Medicina general",
 				"999777666",
-				"ana.vet@test.com",
+				veterinarioEmail,
 				List.of(new HorarioVeterinarioRequest(
 						DayOfWeek.MONDAY,
 						LocalTime.of(9, 0),
@@ -188,12 +243,12 @@ class CitaServiceTest {
 				))
 		));
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
-				"Consulta general",
+				servicioNombre,
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
 		));
 		ServicioResponse vacuna = servicioService.create(new ServicioRequest(
-				"Vacuna rabia",
+				servicioNombre + " vacuna",
 				"Aplicacion de vacuna antirrabica.",
 				new BigDecimal("80.00")
 		));

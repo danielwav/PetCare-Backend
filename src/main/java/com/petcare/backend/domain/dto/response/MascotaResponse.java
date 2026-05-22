@@ -15,6 +15,7 @@ public record MascotaResponse(
 		String raza,
 		SexoMascota sexo,
 		LocalDate fechaNacimiento,
+		Integer edadAnios,
 		String color,
 		BigDecimal pesoKg,
 		String observaciones,

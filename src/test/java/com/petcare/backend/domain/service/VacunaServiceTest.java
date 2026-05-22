@@ -5,10 +5,12 @@ import com.petcare.backend.domain.dto.request.CostoCitaServicioRequest;
 import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.request.HorarioVeterinarioRequest;
 import com.petcare.backend.domain.dto.request.MascotaRequest;
+import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.request.ServicioRequest;
 import com.petcare.backend.domain.dto.request.VacunaMascotaRequest;
 import com.petcare.backend.domain.dto.request.VacunaRequest;
 import com.petcare.backend.domain.dto.request.VeterinarioRequest;
+import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.CitaResponse;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
 import com.petcare.backend.domain.dto.response.MascotaResponse;
@@ -20,6 +22,7 @@ import com.petcare.backend.persistence.enums.SexoMascota;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -39,6 +42,9 @@ class VacunaServiceTest {
 
 	@Autowired
 	private VacunaService vacunaService;
+
+	@Autowired
+	private AuthService authService;
 
 	@Autowired
 	private DuenioService duenioService;
@@ -137,20 +143,72 @@ class VacunaServiceTest {
 		))).isInstanceOf(IllegalArgumentException.class);
 	}
 
-	private TestData createBaseData() {
-		DuenioResponse duenio = duenioService.create(new DuenioRequest(
+	@Test
+	void duenioCanOnlyConsultOwnVaccineHistory() {
+		authService.register(new RegisterRequest("Admin", "admin.vacuna@test.com", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.vacuna@test.com", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.vacuna@test.com", "secret123"));
+		TestData ownerData = createBaseData("12345670", "owner.vacuna.profile@test.com", ownerUser.user().id(), "Lola", "CMVP-010", "vet.vacuna10@test.com", "Consulta vacuna owner");
+		TestData otherData = createBaseData("12345671", "other.vacuna.profile@test.com", otherUser.user().id(), "Toby", "CMVP-011", "vet.vacuna11@test.com", "Consulta vacuna other");
+		VacunaResponse ownerVaccine = vacunaService.create(baseVacunaRequest("Bordetella", 365));
+		VacunaResponse otherVaccine = vacunaService.create(baseVacunaRequest("Leptospira", 365));
+		VacunaMascotaResponse ownerHistory = vacunaService.registerForMascota(ownerData.mascota().id(), new VacunaMascotaRequest(
+				ownerVaccine.id(),
+				ownerData.veterinario().id(),
 				null,
+				LocalDate.now(),
+				"LOTE-OWNER",
+				null,
+				"Aplicada a mascota propia."
+		));
+		vacunaService.registerForMascota(otherData.mascota().id(), new VacunaMascotaRequest(
+				otherVaccine.id(),
+				otherData.veterinario().id(),
+				null,
+				LocalDate.now(),
+				"LOTE-OTHER",
+				null,
+				"Aplicada a mascota ajena."
+		));
+
+		List<VacunaMascotaResponse> ownHistory = vacunaService.findByMascotaForDuenio(
+				ownerData.mascota().id(),
+				ownerUser.user().email()
+		);
+
+		assertThat(ownHistory).extracting(VacunaMascotaResponse::id).containsExactly(ownerHistory.id());
+		assertThatThrownBy(() -> vacunaService.findByMascotaForDuenio(
+				otherData.mascota().id(),
+				ownerUser.user().email()
+		)).isInstanceOf(AccessDeniedException.class);
+	}
+
+	private TestData createBaseData() {
+		return createBaseData("12345678", "daniel@test.com", null, "Firulais", "CMVP-001", "ana.vet@test.com", "Consulta general");
+	}
+
+	private TestData createBaseData(
+			String documento,
+			String duenioEmail,
+			Long usuarioId,
+			String mascotaNombre,
+			String numeroColegiatura,
+			String veterinarioEmail,
+			String servicioNombre
+	) {
+		DuenioResponse duenio = duenioService.create(new DuenioRequest(
+				usuarioId,
 				"Daniel",
 				"Torres",
 				"DNI",
-				"12345678",
+				documento,
 				"999888777",
-				"daniel@test.com",
+				duenioEmail,
 				"Av. Siempre Viva 123"
 		));
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
-				"Firulais",
+				mascotaNombre,
 				"Perro",
 				"Mestizo",
 				SexoMascota.MACHO,
@@ -163,10 +221,10 @@ class VacunaServiceTest {
 				null,
 				"Ana",
 				"Salas",
-				"CMVP-001",
+				numeroColegiatura,
 				"Medicina general",
 				"999777666",
-				"ana.vet@test.com",
+				veterinarioEmail,
 				List.of(new HorarioVeterinarioRequest(
 						DayOfWeek.MONDAY,
 						LocalTime.of(9, 0),
@@ -175,7 +233,7 @@ class VacunaServiceTest {
 				))
 		));
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
-				"Consulta general",
+				servicioNombre,
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
 		));

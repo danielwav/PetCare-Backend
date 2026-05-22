@@ -10,12 +10,14 @@ import com.petcare.backend.domain.repository.VacunaMascotaRepository;
 import com.petcare.backend.domain.repository.VacunaRepository;
 import com.petcare.backend.domain.repository.VeterinarioRepository;
 import com.petcare.backend.persistence.entity.Cita;
+import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Vacuna;
 import com.petcare.backend.persistence.entity.VacunaMascota;
 import com.petcare.backend.persistence.entity.Veterinario;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,7 @@ public class VacunaService {
 	private final MascotaRepository mascotaRepository;
 	private final VeterinarioRepository veterinarioRepository;
 	private final CitaRepository citaRepository;
+	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
 	public VacunaResponse create(VacunaRequest request) {
@@ -131,6 +134,15 @@ public class VacunaService {
 	}
 
 	@Transactional(readOnly = true)
+	public List<VacunaMascotaResponse> findByMascotaForDuenio(Long mascotaId, String email) {
+		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToAuthenticatedDuenio(mascota, email);
+		return vacunaMascotaRepository.findByMascotaIdOrderByFechaAplicacionDesc(mascotaId).stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
 	public List<VacunaMascotaResponse> findUpcoming(Integer dias) {
 		int days = dias == null ? 60 : dias;
 		if (days <= 0) {
@@ -175,6 +187,13 @@ public class VacunaService {
 		}
 		if (cita != null && !cita.getVeterinario().getId().equals(veterinario.getId())) {
 			throw new IllegalArgumentException("La cita no corresponde al veterinario indicado.");
+		}
+	}
+
+	private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		if (!mascota.getDuenio().getId().equals(duenio.getId())) {
+			throw new AccessDeniedException("No tienes permiso para consultar vacunas de esta mascota.");
 		}
 	}
 

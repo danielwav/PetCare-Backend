@@ -1,11 +1,14 @@
 package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.DuenioRequest;
+import com.petcare.backend.domain.dto.request.RegisterRequest;
+import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
 import com.petcare.backend.domain.repository.DuenioRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -21,6 +24,9 @@ class DuenioServiceTest {
 
 	@Autowired
 	private DuenioService duenioService;
+
+	@Autowired
+	private AuthService authService;
 
 	@Autowired
 	private DuenioRepository duenioRepository;
@@ -130,5 +136,80 @@ class DuenioServiceTest {
 				"documento.duplicado@test.com",
 				null
 		))).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	void createDuenioLinksExistingDuenioUserByEmail() {
+		authService.register(new RegisterRequest("Admin", "admin.link@test.com", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.link@test.com", "secret123"));
+
+		DuenioResponse owner = duenioService.create(new DuenioRequest(
+				null,
+				"Owner",
+				"Linked",
+				"DNI",
+				"70000008",
+				"999444562",
+				"owner.link@test.com",
+				null
+		));
+
+		assertThat(owner.usuarioId()).isEqualTo(ownerUser.user().id());
+		assertThat(duenioService.findOwn(ownerUser.user().email()).id()).isEqualTo(owner.id());
+	}
+
+	@Test
+	void duenioCanOnlyReadAndUpdateOwnProfile() {
+		authService.register(new RegisterRequest("Admin", "admin.duenio@test.com", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.duenio@test.com", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.duenio@test.com", "secret123"));
+
+		DuenioResponse owner = duenioService.create(new DuenioRequest(
+				ownerUser.user().id(),
+				"Owner",
+				"Principal",
+				"DNI",
+				"70000006",
+				"999444558",
+				"owner.profile@test.com",
+				null
+		));
+		DuenioResponse other = duenioService.create(new DuenioRequest(
+				otherUser.user().id(),
+				"Other",
+				"Owner",
+				"DNI",
+				"70000007",
+				"999444559",
+				"other.profile@test.com",
+				null
+		));
+
+		DuenioResponse ownProfile = duenioService.findOwn(ownerUser.user().email());
+		DuenioResponse updated = duenioService.updateOwn(owner.id(), new DuenioRequest(
+				null,
+				"Owner Editado",
+				"Principal",
+				"DNI",
+				"70000006",
+				"999444560",
+				"owner.edited@test.com",
+				"Av. Propia 123"
+		), ownerUser.user().email());
+
+		assertThat(ownProfile.id()).isEqualTo(owner.id());
+		assertThat(updated.nombres()).isEqualTo("Owner Editado");
+		assertThatThrownBy(() -> duenioService.findOwnById(other.id(), ownerUser.user().email()))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> duenioService.updateOwn(owner.id(), new DuenioRequest(
+				otherUser.user().id(),
+				"Owner",
+				"Principal",
+				"DNI",
+				"70000006",
+				"999444561",
+				"owner.fail@test.com",
+				null
+		), ownerUser.user().email())).isInstanceOf(IllegalArgumentException.class);
 	}
 }

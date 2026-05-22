@@ -31,26 +31,36 @@ public class CitaController {
 
 	@PostMapping("/api/citas")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
-	public CitaResponse create(@Valid @RequestBody CitaRequest request) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public CitaResponse create(@Valid @RequestBody CitaRequest request, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return citaService.createAsDuenio(request, authentication.getName());
+		}
 		return citaService.create(request);
 	}
 
 	@GetMapping("/api/citas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<CitaResponse> findAll(
 			@RequestParam(required = false) EstadoCita estado,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
 			@RequestParam(required = false) Long duenioId,
 			@RequestParam(required = false) Long mascotaId,
-			@RequestParam(required = false) Long veterinarioId
+			@RequestParam(required = false) Long veterinarioId,
+			Authentication authentication
 	) {
+		if (isDuenioOnly(authentication)) {
+			return citaService.findAllForDuenio(authentication.getName(), estado, fecha, mascotaId, veterinarioId);
+		}
 		return citaService.findAll(estado, fecha, duenioId, mascotaId, veterinarioId);
 	}
 
 	@GetMapping("/api/citas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public CitaResponse findById(@PathVariable Long id) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
+	public CitaResponse findById(@PathVariable Long id, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return citaService.findByIdForDuenio(id, authentication.getName());
+		}
 		return citaService.findById(id);
 	}
 
@@ -61,8 +71,11 @@ public class CitaController {
 	}
 
 	@PatchMapping("/api/citas/{id}/cancelar")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
-	public CitaResponse cancel(@PathVariable Long id) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public CitaResponse cancel(@PathVariable Long id, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return citaService.cancelAsDuenio(id, authentication.getName());
+		}
 		return citaService.cancel(id);
 	}
 
@@ -70,6 +83,9 @@ public class CitaController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public CitaResponse confirm(@PathVariable Long id, Authentication authentication) {
 		String confirmedBy = authentication == null ? "sistema" : authentication.getName();
+		if (isDuenioOnly(authentication)) {
+			return citaService.confirmAsDuenio(id, confirmedBy);
+		}
 		return citaService.confirm(id, confirmedBy);
 	}
 
@@ -77,5 +93,17 @@ public class CitaController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public List<CitaResponse> findConfirmationAlerts(@RequestParam(required = false) Integer horas) {
 		return citaService.findConfirmationAlerts(horas);
+	}
+
+	private boolean isDuenioOnly(Authentication authentication) {
+		return hasRole(authentication, "ROLE_DUENIO")
+				&& !hasRole(authentication, "ROLE_ADMIN")
+				&& !hasRole(authentication, "ROLE_ASISTENTE")
+				&& !hasRole(authentication, "ROLE_VETERINARIO");
+	}
+
+	private boolean hasRole(Authentication authentication, String role) {
+		return authentication != null && authentication.getAuthorities().stream()
+				.anyMatch(authority -> authority.getAuthority().equals(role));
 	}
 }

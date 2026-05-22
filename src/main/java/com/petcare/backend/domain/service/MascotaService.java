@@ -8,10 +8,13 @@ import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.List;
 
 @Service
@@ -20,6 +23,7 @@ public class MascotaService {
 
 	private final MascotaRepository mascotaRepository;
 	private final DuenioRepository duenioRepository;
+	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
 	public MascotaResponse create(MascotaRequest request) {
@@ -64,8 +68,28 @@ public class MascotaService {
 	}
 
 	@Transactional(readOnly = true)
+	public List<MascotaResponse> findAllForDuenio(String email, String search, Boolean active) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		return findAll(search, duenio.getId(), active);
+	}
+
+	@Transactional(readOnly = true)
+	public List<MascotaResponse> findByDuenioForDuenio(String email, Long duenioId) {
+		authenticatedDuenioService.validateOwnDuenio(email, duenioId);
+		return findByDuenio(duenioId);
+	}
+
+	@Transactional(readOnly = true)
 	public MascotaResponse findById(Long id) {
 		return toResponse(findEntityById(id));
+	}
+
+	@Transactional(readOnly = true)
+	public MascotaResponse findByIdForDuenio(Long id, String email) {
+		Mascota mascota = findEntityById(id);
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		validateOwnedMascota(mascota, duenio);
+		return toResponse(mascota);
 	}
 
 	@Transactional
@@ -111,6 +135,12 @@ public class MascotaService {
 		return duenio;
 	}
 
+	private void validateOwnedMascota(Mascota mascota, Duenio duenio) {
+		if (!mascota.getDuenio().getId().equals(duenio.getId())) {
+			throw new AccessDeniedException("No tienes permiso para consultar esta mascota.");
+		}
+	}
+
 	private MascotaResponse toResponse(Mascota mascota) {
 		Duenio duenio = mascota.getDuenio();
 		String duenioNombreCompleto = duenio.getNombres() + " " + duenio.getApellidos();
@@ -124,6 +154,7 @@ public class MascotaService {
 				mascota.getRaza(),
 				mascota.getSexo(),
 				mascota.getFechaNacimiento(),
+				calculateAgeYears(mascota.getFechaNacimiento()),
 				mascota.getColor(),
 				mascota.getPesoKg(),
 				mascota.getObservaciones(),
@@ -131,6 +162,10 @@ public class MascotaService {
 				mascota.getCreatedAt(),
 				mascota.getUpdatedAt()
 		);
+	}
+
+	private Integer calculateAgeYears(LocalDate birthDate) {
+		return Period.between(birthDate, LocalDate.now()).getYears();
 	}
 
 	private String normalizeText(String value) {

@@ -1,6 +1,7 @@
 package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.request.LoginRequest;
+import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
@@ -32,6 +33,11 @@ public class AuthController {
 	@PostMapping("/login")
 	public AuthResponse login(@Valid @RequestBody LoginRequest request) {
 		return authService.login(request);
+	}
+
+	@PostMapping("/refresh")
+	public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
+		return authService.refresh(request);
 	}
 
 	@GetMapping("/me")

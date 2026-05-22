@@ -20,6 +20,7 @@ import com.petcare.backend.persistence.entity.Veterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class CitaService {
 	private final VeterinarioRepository veterinarioRepository;
 	private final HorarioVeterinarioRepository horarioVeterinarioRepository;
 	private final ServicioRepository servicioRepository;
+	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
 	public CitaResponse create(CitaRequest request) {
@@ -77,6 +79,12 @@ public class CitaService {
 		return toResponse(citaRepository.save(cita));
 	}
 
+	@Transactional
+	public CitaResponse createAsDuenio(CitaRequest request, String email) {
+		authenticatedDuenioService.validateOwnDuenio(email, request.duenioId());
+		return create(request);
+	}
+
 	@Transactional(readOnly = true)
 	public List<CitaResponse> findAll(
 			EstadoCita estado,
@@ -91,8 +99,27 @@ public class CitaService {
 	}
 
 	@Transactional(readOnly = true)
+	public List<CitaResponse> findAllForDuenio(
+			String email,
+			EstadoCita estado,
+			LocalDate fecha,
+			Long mascotaId,
+			Long veterinarioId
+	) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		return findAll(estado, fecha, duenio.getId(), mascotaId, veterinarioId);
+	}
+
+	@Transactional(readOnly = true)
 	public CitaResponse findById(Long id) {
 		return toResponse(findEntityById(id));
+	}
+
+	@Transactional(readOnly = true)
+	public CitaResponse findByIdForDuenio(Long id, String email) {
+		Cita cita = findEntityById(id);
+		validateCitaBelongsToAuthenticatedDuenio(cita, email);
+		return toResponse(cita);
 	}
 
 	@Transactional
@@ -142,6 +169,13 @@ public class CitaService {
 	}
 
 	@Transactional
+	public CitaResponse cancelAsDuenio(Long id, String email) {
+		Cita cita = findEntityById(id);
+		validateCitaBelongsToAuthenticatedDuenio(cita, email);
+		return cancel(id);
+	}
+
+	@Transactional
 	public CitaResponse confirm(Long id, String confirmadaPor) {
 		Cita cita = findEntityById(id);
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
@@ -160,6 +194,13 @@ public class CitaService {
 		cita.setConfirmadaPor(normalizeText(confirmadaPor));
 		cita.setUpdatedAt(LocalDateTime.now());
 		return toResponse(citaRepository.save(cita));
+	}
+
+	@Transactional
+	public CitaResponse confirmAsDuenio(Long id, String email) {
+		Cita cita = findEntityById(id);
+		validateCitaBelongsToAuthenticatedDuenio(cita, email);
+		return confirm(id, email);
 	}
 
 	@Transactional(readOnly = true)
@@ -282,6 +323,13 @@ public class CitaService {
 	private void validateMascotaBelongsToDuenio(Mascota mascota, Duenio duenio) {
 		if (!mascota.getDuenio().getId().equals(duenio.getId())) {
 			throw new IllegalArgumentException("La mascota no pertenece al duenio indicado.");
+		}
+	}
+
+	private void validateCitaBelongsToAuthenticatedDuenio(Cita cita, String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		if (!cita.getDuenio().getId().equals(duenio.getId())) {
+			throw new AccessDeniedException("No tienes permiso para consultar esta cita.");
 		}
 	}
 
