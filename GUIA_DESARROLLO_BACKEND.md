@@ -1523,7 +1523,7 @@ El endpoint devuelve contadores y listas para:
 
 **Que se esta haciendo:** se agregan consultas utiles para seguimiento administrativo y clinico.
 
-**Consultas recomendadas:**
+**Consultas implementadas:**
 
 - Citas por estado y rango de fechas.
 - Citas por veterinario.
@@ -1534,10 +1534,51 @@ El endpoint devuelve contadores y listas para:
 - Servicios mas solicitados.
 - Historial clinico completo por mascota.
 
+**Archivos principales:**
+
+- `ReporteController`: expone los endpoints de consulta.
+- `ReporteService`: centraliza la logica de reportes.
+- `ReporteCitaResponse`: respuesta resumida para citas.
+- `ReporteCostoCitaResponse`: total, subtotal, descuento y detalle de costos de una cita.
+- `ServicioSolicitadoResponse`: resumen de servicios mas solicitados.
+- `CitaRepository`: consulta dinamica de citas por filtros.
+- `DetalleCostoCitaRepository`: consulta agrupada para servicios mas solicitados.
+
+**Reglas de consulta:**
+
+- Los filtros de fecha usan formato `yyyy-MM-dd`.
+- Si se envia `fechaInicio` y `fechaFin`, `fechaFin` no puede ser menor que `fechaInicio`.
+- El reporte de citas permite combinar filtros de estado, duenio, mascota, veterinario y rango de fechas.
+- El reporte de vacunas proximas usa por defecto desde hoy hasta 30 dias despues si no se envian fechas.
+- El costo total de una cita se obtiene desde los valores calculados en la cita y sus detalles de servicios.
+- Los servicios mas solicitados se agrupan por nombre de servicio, sumando cantidad y monto generado.
+- El historial clinico por mascota reutiliza las atenciones clinicas registradas en orden cronologico.
+
+**Endpoints implementados:**
+
+| Metodo | Ruta | Descripcion | Roles |
+| --- | --- | --- | --- |
+| `GET` | `/api/reportes/citas` | Lista citas por estado, fechas, veterinario, mascota o duenio. | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET` | `/api/reportes/inasistencias` | Lista inasistencias por duenio y rango de fechas. | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET` | `/api/reportes/vacunas-proximas` | Lista vacunas con proxima dosis dentro de un rango. | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET` | `/api/reportes/citas/{id}/costos` | Devuelve subtotal, descuento, total y detalle de servicios de una cita. | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET` | `/api/reportes/servicios-mas-solicitados` | Devuelve servicios agrupados por cantidad solicitada y monto generado. | `ADMIN`, `ASISTENTE` |
+| `GET` | `/api/reportes/mascotas/{id}/historia-clinica` | Devuelve el historial clinico completo de una mascota. | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+
+**Parametros sugeridos:**
+
+| Endpoint | Parametros |
+| --- | --- |
+| `/api/reportes/citas` | `estado`, `fechaInicio`, `fechaFin`, `veterinarioId`, `mascotaId`, `duenioId` |
+| `/api/reportes/inasistencias` | `duenioId`, `fechaInicio`, `fechaFin` |
+| `/api/reportes/vacunas-proximas` | `fechaInicio`, `fechaFin` |
+| `/api/reportes/servicios-mas-solicitados` | `fechaInicio`, `fechaFin` |
+
 **Resultado esperado:**
 
 - El sistema permite tomar decisiones con informacion centralizada.
 - Se mejora la organizacion interna de la veterinaria.
+- El personal puede consultar reportes desde Swagger o desde el frontend sin revisar modulo por modulo.
 
 ## 9. Requerimientos funcionales consolidados
 

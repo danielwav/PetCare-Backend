@@ -34,6 +34,28 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 
 	@Query("""
 			select c from Cita c
+			join fetch c.duenio d
+			join fetch c.mascota m
+			join fetch c.veterinario v
+			where (:estado is null or c.estado = :estado)
+			and (:fechaInicio is null or c.fecha >= :fechaInicio)
+			and (:fechaFin is null or c.fecha <= :fechaFin)
+			and (:duenioId is null or d.id = :duenioId)
+			and (:mascotaId is null or m.id = :mascotaId)
+			and (:veterinarioId is null or v.id = :veterinarioId)
+			order by c.fecha asc, c.horaInicio asc
+			""")
+	List<Cita> searchByDateRange(
+			@Param("estado") EstadoCita estado,
+			@Param("fechaInicio") LocalDate fechaInicio,
+			@Param("fechaFin") LocalDate fechaFin,
+			@Param("duenioId") Long duenioId,
+			@Param("mascotaId") Long mascotaId,
+			@Param("veterinarioId") Long veterinarioId
+	);
+
+	@Query("""
+			select c from Cita c
 			where c.veterinario.id = :veterinarioId
 			and c.fecha = :fecha
 			and c.estado <> com.petcare.backend.persistence.enums.EstadoCita.CANCELADA
