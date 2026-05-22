@@ -1287,7 +1287,55 @@ Representa el seguimiento periodico de evolucion de una mascota.
 
 **Que se esta haciendo:** se registra la aplicacion de vacunas y se calcula la proxima dosis para generar alertas.
 
-**Actividades:**
+**Archivos principales:**
+
+```text
+persistence/entity/Vacuna.java
+persistence/entity/VacunaMascota.java
+domain/repository/VacunaRepository.java
+domain/repository/VacunaMascotaRepository.java
+domain/dto/request/VacunaRequest.java
+domain/dto/request/VacunaMascotaRequest.java
+domain/dto/response/VacunaResponse.java
+domain/dto/response/VacunaMascotaResponse.java
+domain/service/VacunaService.java
+web/VacunaController.java
+```
+
+**Entidades creadas:**
+
+#### `Vacuna`
+
+Representa el catalogo de vacunas que la veterinaria puede aplicar.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador de la vacuna. |
+| `nombre` | `String` | Nombre unico de la vacuna. |
+| `descripcion` | `String` | Descripcion o uso de la vacuna. |
+| `intervaloProximaDosisDias` | `Integer` | Dias para calcular la siguiente dosis automaticamente. |
+| `active` | `Boolean` | Permite activar o desactivar la vacuna. |
+| `createdAt` | `LocalDateTime` | Fecha de creacion. |
+| `updatedAt` | `LocalDateTime` | Fecha de ultima actualizacion. |
+
+#### `VacunaMascota`
+
+Representa una vacuna aplicada a una mascota.
+
+| Campo | Tipo | Descripcion |
+| --- | --- | --- |
+| `id` | `Long` | Identificador del registro. |
+| `mascota` | `Mascota` | Mascota vacunada. |
+| `vacuna` | `Vacuna` | Vacuna aplicada. |
+| `veterinario` | `Veterinario` | Veterinario responsable. |
+| `cita` | `Cita` | Cita relacionada, si aplica. |
+| `fechaAplicacion` | `LocalDate` | Fecha de aplicacion. |
+| `lote` | `String` | Lote de la vacuna, si aplica. |
+| `fechaProximaDosis` | `LocalDate` | Fecha de la siguiente dosis. |
+| `observaciones` | `String` | Observaciones del registro. |
+| `createdAt` | `LocalDateTime` | Fecha de creacion del registro. |
+
+**Actividades implementadas:**
 
 - Crear entidad `Vacuna`.
 - Crear entidad `VacunaMascota`.
@@ -1295,15 +1343,92 @@ Representa el seguimiento periodico de evolucion de una mascota.
 - Registrar o calcular `fechaProximaDosis`.
 - Marcar vacunas proximas a vencer.
 - Generar alerta cuando falten 30 dias o menos para la siguiente dosis.
+- Administrar catalogo de vacunas.
+- Listar historial de vacunas por mascota.
+- Consultar proximas dosis por ventana configurable.
 
-**Endpoints sugeridos:**
+**Reglas de negocio:**
+
+- Solo `ADMIN` puede crear, editar, activar o desactivar vacunas del catalogo.
+- `ADMIN`, `ASISTENTE` y `VETERINARIO` pueden consultar catalogo e historial.
+- La mascota, vacuna y veterinario deben estar activos para registrar una aplicacion.
+- Si se informa `citaId`, la cita debe pertenecer a la misma mascota y al mismo veterinario.
+- Si no se envia `fechaProximaDosis`, se calcula con `fechaAplicacion + intervaloProximaDosisDias`.
+- Si la vacuna no tiene intervalo configurado y no se envia proxima dosis, el registro queda como `SIN_PROXIMA_DOSIS`.
+- La proxima dosis manual debe ser posterior a la fecha de aplicacion.
+- `GET /api/alertas/vacunas` usa 30 dias por defecto.
+
+**Estados de alerta calculados:**
+
+| Estado | Descripcion |
+| --- | --- |
+| `SIN_PROXIMA_DOSIS` | El registro no tiene fecha de siguiente dosis. |
+| `VENCIDA` | La proxima dosis ya paso. |
+| `PROXIMA` | La proxima dosis vence en 30 dias o menos. |
+| `PROGRAMADA` | La proxima dosis esta fuera de la ventana de alerta. |
+
+**Endpoints implementados:**
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
+| `POST` | `/api/vacunas` | Crear vacuna en el catalogo. |
+| `GET` | `/api/vacunas` | Listar vacunas activas por defecto. Permite `search` y `active`. |
+| `GET` | `/api/vacunas/{id}` | Obtener detalle de vacuna. |
+| `PUT` | `/api/vacunas/{id}` | Actualizar vacuna. |
+| `PATCH` | `/api/vacunas/{id}/activar` | Reactivar vacuna. |
+| `DELETE` | `/api/vacunas/{id}` | Desactivar vacuna. |
 | `POST` | `/api/mascotas/{id}/vacunas` | Registrar vacuna aplicada. |
 | `GET` | `/api/mascotas/{id}/vacunas` | Listar vacunas de una mascota. |
-| `GET` | `/api/vacunas/proximas` | Consultar proximas dosis. |
-| `GET` | `/api/alertas/vacunas` | Consultar alertas de vacunas. |
+| `GET` | `/api/vacunas/proximas` | Consultar proximas dosis. Permite `dias`. |
+| `GET` | `/api/alertas/vacunas` | Consultar alertas de vacunas. Permite `dias`. |
+
+**Ejemplo de request para crear vacuna:**
+
+```json
+{
+  "nombre": "Rabia",
+  "descripcion": "Proteccion antirrabica anual.",
+  "intervaloProximaDosisDias": 365
+}
+```
+
+**Ejemplo de request para registrar vacuna aplicada:**
+
+```json
+{
+  "vacunaId": 1,
+  "veterinarioId": 1,
+  "citaId": 1,
+  "fechaAplicacion": "2026-05-20",
+  "lote": "LOTE-001",
+  "fechaProximaDosis": null,
+  "observaciones": "Primera dosis aplicada sin reacciones."
+}
+```
+
+**Ejemplos de consulta:**
+
+```text
+GET /api/vacunas/proximas
+GET /api/vacunas/proximas?dias=60
+GET /api/alertas/vacunas
+GET /api/alertas/vacunas?dias=30
+```
+
+**Permisos:**
+
+| Endpoint | Roles permitidos |
+| --- | --- |
+| `POST /api/vacunas` | `ADMIN` |
+| `GET /api/vacunas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/vacunas/{id}` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `PUT /api/vacunas/{id}` | `ADMIN` |
+| `PATCH /api/vacunas/{id}/activar` | `ADMIN` |
+| `DELETE /api/vacunas/{id}` | `ADMIN` |
+| `POST /api/mascotas/{id}/vacunas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/mascotas/{id}/vacunas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/vacunas/proximas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
+| `GET /api/alertas/vacunas` | `ADMIN`, `ASISTENTE`, `VETERINARIO` |
 
 **Resultado esperado:**
 
