@@ -8,6 +8,7 @@ import com.petcare.backend.domain.repository.CitaRepository;
 import com.petcare.backend.domain.repository.MascotaRepository;
 import com.petcare.backend.domain.repository.VacunaMascotaRepository;
 import com.petcare.backend.domain.repository.VacunaRepository;
+import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.domain.repository.VeterinarioRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.Duenio;
@@ -37,6 +38,7 @@ public class VacunaService {
 	private final VeterinarioRepository veterinarioRepository;
 	private final CitaRepository citaRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
+	private final UsuarioRepository usuarioRepository;
 
 	@Transactional
 	public VacunaResponse create(VacunaRequest request) {
@@ -99,10 +101,33 @@ public class VacunaService {
 	}
 
 	@Transactional
+	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, String email) {
+		Long veterinarioId = request.veterinarioId();
+		if (veterinarioId == null || veterinarioId == 0) {
+			Long usuarioId = usuarioRepository.findByEmail(email)
+					.orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"))
+					.getId();
+			veterinarioId = veterinarioRepository.findByUsuarioId(usuarioId)
+					.map(Veterinario::getId)
+					.orElse(null);
+			if (veterinarioId == null) {
+				veterinarioId = veterinarioRepository.findAll().stream()
+						.findFirst()
+						.map(Veterinario::getId)
+						.orElseThrow(() -> new EntityNotFoundException("No hay veterinarios disponibles"));
+			}
+		}
+		return registerForMascota(mascotaId, request, veterinarioId);
+	}
+
 	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request) {
+		return registerForMascota(mascotaId, request, request.veterinarioId());
+	}
+
+	private VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, Long veterinarioId) {
 		Mascota mascota = findMascota(mascotaId);
 		Vacuna vacuna = findVacuna(request.vacunaId());
-		Veterinario veterinario = findVeterinario(request.veterinarioId());
+		Veterinario veterinario = veterinarioId != null && veterinarioId > 0 ? findVeterinario(veterinarioId) : null;
 		Cita cita = findCitaIfPresent(request.citaId());
 
 		validateApplicationData(mascota, vacuna, veterinario, cita);
@@ -172,6 +197,20 @@ public class VacunaService {
 				.toList();
 	}
 
+	public List<VacunaMascotaResponse> findAlertsForDuenio(Integer dias, String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		int days = dias == null ? DEFAULT_ALERT_DAYS : dias;
+		if (days <= 0) {
+			throw new IllegalArgumentException("La ventana de alertas debe ser mayor a cero.");
+		}
+
+		return vacunaMascotaRepository.findByMascotaDuenioIdAndFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(
+						duenio.getId(), LocalDate.now().plusDays(days)
+				).stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
 	private void validateApplicationData(Mascota mascota, Vacuna vacuna, Veterinario veterinario, Cita cita) {
 		if (!mascota.getActive()) {
 			throw new IllegalArgumentException("La mascota no esta activa.");
@@ -179,13 +218,13 @@ public class VacunaService {
 		if (!vacuna.getActive()) {
 			throw new IllegalArgumentException("La vacuna no esta activa.");
 		}
-		if (!veterinario.getActive()) {
+		if (veterinario != null && !veterinario.getActive()) {
 			throw new IllegalArgumentException("El veterinario no esta activo.");
 		}
 		if (cita != null && !cita.getMascota().getId().equals(mascota.getId())) {
 			throw new IllegalArgumentException("La cita no pertenece a la mascota indicada.");
 		}
-		if (cita != null && !cita.getVeterinario().getId().equals(veterinario.getId())) {
+		if (cita != null && veterinario != null && !cita.getVeterinario().getId().equals(veterinario.getId())) {
 			throw new IllegalArgumentException("La cita no corresponde al veterinario indicado.");
 		}
 	}

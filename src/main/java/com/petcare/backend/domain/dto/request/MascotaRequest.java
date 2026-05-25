@@ -19,6 +19,7 @@ public record MascotaRequest(
 		@NotNull @PastOrPresent LocalDate fechaNacimiento,
 		@Size(max = 50) String color,
 		@DecimalMin(value = "0.01") BigDecimal pesoKg,
-		@Size(max = 300) String observaciones
+		@Size(max = 300) String observaciones,
+		String fotoUrl
 ) {
 }

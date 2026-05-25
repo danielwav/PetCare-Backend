@@ -29,8 +29,11 @@ public class MascotaController {
 
 	@PostMapping("/api/mascotas")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
-	public MascotaResponse create(@Valid @RequestBody MascotaRequest request) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public MascotaResponse create(@Valid @RequestBody MascotaRequest request, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return mascotaService.createForDuenio(authentication.getName(), request);
+		}
 		return mascotaService.create(request);
 	}
 
@@ -67,16 +70,23 @@ public class MascotaController {
 	}
 
 	@PutMapping("/api/mascotas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
-	public MascotaResponse update(@PathVariable Long id, @Valid @RequestBody MascotaRequest request) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public MascotaResponse update(@PathVariable Long id, @Valid @RequestBody MascotaRequest request, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return mascotaService.updateForDuenio(id, request, authentication.getName());
+		}
 		return mascotaService.update(id, request);
 	}
 
 	@DeleteMapping("/api/mascotas/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
-	public void deactivate(@PathVariable Long id) {
-		mascotaService.deactivate(id);
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
+	public void deactivate(@PathVariable Long id, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			mascotaService.deactivateForDuenio(id, authentication.getName());
+		} else {
+			mascotaService.deactivate(id);
+		}
 	}
 
 	private boolean isDuenioOnly(Authentication authentication) {

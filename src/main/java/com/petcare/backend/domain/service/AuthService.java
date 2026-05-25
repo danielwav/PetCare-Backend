@@ -1,5 +1,6 @@
 package com.petcare.backend.domain.service;
 
+import com.petcare.backend.domain.dto.request.CreateInternalUserRequest;
 import com.petcare.backend.domain.dto.request.LoginRequest;
 import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
@@ -14,6 +15,7 @@ import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.security.JwtProperties;
 import com.petcare.backend.security.JwtService;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +41,7 @@ public class AuthService {
 	private final UsuarioRepository usuarioRepository;
 	private final DuenioRepository duenioRepository;
 	private final JwtProperties jwtProperties;
+	private final EmailService emailService;
 
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
@@ -46,7 +50,7 @@ public class AuthService {
 			throw new IllegalArgumentException("El correo ya esta registrado.");
 		}
 
-		RoleName roleName = usuarioRepository.count() == 0 ? RoleName.ROLE_ADMIN : RoleName.ROLE_DUENIO;
+		RoleName roleName = RoleName.ROLE_DUENIO;
 		Rol role = rolRepository.findByName(roleName)
 				.orElseThrow(() -> new IllegalStateException("Rol base no encontrado: " + roleName));
 
@@ -87,6 +91,71 @@ public class AuthService {
 
 	public UserResponse me(String email) {
 		return toUserResponse(findByEmail(email));
+	}
+
+	@Transactional
+	public String createInternalUser(CreateInternalUserRequest request) {
+		String email = request.email().toLowerCase();
+		if (usuarioRepository.existsByEmail(email)) {
+			throw new IllegalArgumentException("El correo ya esta registrado.");
+		}
+
+		String roleStr = request.rol().toUpperCase();
+		RoleName roleName;
+		try {
+			roleName = RoleName.valueOf("ROLE_" + roleStr);
+		} catch (IllegalArgumentException e) {
+			throw new IllegalArgumentException("Rol invalido. Use VETERINARIO o ASISTENTE.");
+		}
+
+		if (roleName == RoleName.ROLE_ADMIN || roleName == RoleName.ROLE_DUENIO) {
+			throw new IllegalArgumentException("No puedes asignar este rol desde aqui.");
+		}
+
+		Rol role = rolRepository.findByName(roleName)
+				.orElseThrow(() -> new IllegalStateException("Rol no encontrado: " + roleName));
+
+		String token = UUID.randomUUID().toString();
+		String fullName = request.nombres() + " " + request.apellidos();
+
+		Usuario usuario = Usuario.builder()
+				.fullName(fullName)
+				.email(email)
+				.password(passwordEncoder.encode(token))
+				.active(false)
+				.activationToken(token)
+				.tokenExpiry(LocalDateTime.now().plusDays(7))
+				.createdAt(LocalDateTime.now())
+				.roles(Set.of(role))
+				.build();
+
+		usuarioRepository.save(usuario);
+		emailService.sendActivationEmail(email, fullName, token);
+		return token;
+	}
+
+	@Transactional
+	public void activateWithToken(String token, String password) {
+		Usuario usuario = usuarioRepository.findByActivationToken(token)
+				.orElseThrow(() -> new IllegalArgumentException("Token de activacion invalido."));
+
+		if (usuario.getTokenExpiry() == null || usuario.getTokenExpiry().isBefore(LocalDateTime.now())) {
+			throw new IllegalArgumentException("El token de activacion ha expirado.");
+		}
+
+		if (usuario.getActive()) {
+			throw new IllegalArgumentException("La cuenta ya esta activa.");
+		}
+
+		if (password == null || password.length() < 8) {
+			throw new IllegalArgumentException("La contrasena debe tener al menos 8 caracteres.");
+		}
+
+		usuario.setPassword(passwordEncoder.encode(password));
+		usuario.setActive(true);
+		usuario.setActivationToken(null);
+		usuario.setTokenExpiry(null);
+		usuarioRepository.save(usuario);
 	}
 
 	private Usuario findByEmail(String email) {

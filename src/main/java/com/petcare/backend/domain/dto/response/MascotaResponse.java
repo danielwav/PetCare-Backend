@@ -19,6 +19,7 @@ public record MascotaResponse(
 		String color,
 		BigDecimal pesoKg,
 		String observaciones,
+		String fotoUrl,
 		Boolean active,
 		LocalDateTime createdAt,
 		LocalDateTime updatedAt

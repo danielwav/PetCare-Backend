@@ -37,7 +37,7 @@ public class VacunaController {
 	}
 
 	@GetMapping("/api/vacunas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<VacunaResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active
@@ -75,9 +75,10 @@ public class VacunaController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public VacunaMascotaResponse registerForMascota(
 			@PathVariable Long id,
-			@Valid @RequestBody VacunaMascotaRequest request
+			@Valid @RequestBody VacunaMascotaRequest request,
+			Authentication authentication
 	) {
-		return vacunaService.registerForMascota(id, request);
+		return vacunaService.registerForMascota(id, request, authentication.getName());
 	}
 
 	@GetMapping("/api/mascotas/{id}/vacunas")
@@ -96,8 +97,11 @@ public class VacunaController {
 	}
 
 	@GetMapping("/api/alertas/vacunas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public List<VacunaMascotaResponse> findAlerts(@RequestParam(required = false) Integer dias) {
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
+	public List<VacunaMascotaResponse> findAlerts(@RequestParam(required = false) Integer dias, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return vacunaService.findAlertsForDuenio(dias, authentication.getName());
+		}
 		return vacunaService.findAlerts(dias);
 	}
 

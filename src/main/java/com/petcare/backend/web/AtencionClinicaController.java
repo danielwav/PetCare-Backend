@@ -32,7 +32,7 @@ public class AtencionClinicaController {
 	}
 
 	@GetMapping("/api/mascotas/{id}/historia-clinica")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
+	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public HistoriaClinicaResponse findHistoriaClinicaByMascota(@PathVariable Long id) {
 		return atencionClinicaService.findHistoriaClinicaByMascota(id);
 	}

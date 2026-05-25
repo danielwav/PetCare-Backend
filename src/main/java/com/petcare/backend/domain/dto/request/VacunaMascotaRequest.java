@@ -8,7 +8,7 @@ import java.time.LocalDate;
 
 public record VacunaMascotaRequest(
 		@NotNull Long vacunaId,
-		@NotNull Long veterinarioId,
+		Long veterinarioId,
 		Long citaId,
 		@NotNull @PastOrPresent LocalDate fechaAplicacion,
 		@Size(max = 80) String lote,

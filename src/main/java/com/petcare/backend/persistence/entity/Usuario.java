@@ -45,6 +45,11 @@ public class Usuario {
 	@Column(nullable = false)
 	private Boolean active;
 
+	@Column(length = 255)
+	private String activationToken;
+
+	private LocalDateTime tokenExpiry;
+
 	@Column(nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 

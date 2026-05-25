@@ -2,10 +2,13 @@ package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.MascotaRequest;
 import com.petcare.backend.domain.dto.response.MascotaResponse;
+import com.petcare.backend.domain.repository.CitaRepository;
 import com.petcare.backend.domain.repository.DuenioRepository;
 import com.petcare.backend.domain.repository.MascotaRepository;
+import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
+import com.petcare.backend.persistence.enums.EstadoCita;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -23,6 +26,7 @@ public class MascotaService {
 
 	private final MascotaRepository mascotaRepository;
 	private final DuenioRepository duenioRepository;
+	private final CitaRepository citaRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
@@ -40,12 +44,30 @@ public class MascotaService {
 				.color(normalizeNullableText(request.color()))
 				.pesoKg(request.pesoKg())
 				.observaciones(normalizeNullableText(request.observaciones()))
+				.fotoUrl(request.fotoUrl())
 				.active(true)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
 
 		return toResponse(mascotaRepository.save(mascota));
+	}
+
+	@Transactional
+	public MascotaResponse createForDuenio(String email, MascotaRequest request) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		return create(new MascotaRequest(
+				duenio.getId(),
+				request.nombre(),
+				request.especie(),
+				request.raza(),
+				request.sexo(),
+				request.fechaNacimiento(),
+				request.color(),
+				request.pesoKg(),
+				request.observaciones(),
+				request.fotoUrl()
+		));
 	}
 
 	@Transactional(readOnly = true)
@@ -106,17 +128,57 @@ public class MascotaService {
 		mascota.setColor(normalizeNullableText(request.color()));
 		mascota.setPesoKg(request.pesoKg());
 		mascota.setObservaciones(normalizeNullableText(request.observaciones()));
+		mascota.setFotoUrl(request.fotoUrl());
 		mascota.setUpdatedAt(LocalDateTime.now());
 
 		return toResponse(mascotaRepository.save(mascota));
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
+	public MascotaResponse updateForDuenio(Long id, MascotaRequest request, String email) {
 		Mascota mascota = findEntityById(id);
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		validateOwnedMascota(mascota, duenio);
+		mascota.setNombre(normalizeText(request.nombre()));
+		mascota.setEspecie(normalizeText(request.especie()));
+		mascota.setRaza(normalizeText(request.raza()));
+		mascota.setSexo(request.sexo());
+		mascota.setFechaNacimiento(request.fechaNacimiento());
+		mascota.setColor(normalizeNullableText(request.color()));
+		mascota.setPesoKg(request.pesoKg());
+		mascota.setObservaciones(normalizeNullableText(request.observaciones()));
+		mascota.setFotoUrl(request.fotoUrl());
+		mascota.setUpdatedAt(LocalDateTime.now());
+		return toResponse(mascotaRepository.save(mascota));
+	}
+
+	@Transactional
+	public void deactivateForDuenio(Long id, String email) {
+		Mascota mascota = findEntityById(id);
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		validateOwnedMascota(mascota, duenio);
+		cancelFutureCitas(id);
 		mascota.setActive(false);
 		mascota.setUpdatedAt(LocalDateTime.now());
 		mascotaRepository.save(mascota);
+	}
+
+	@Transactional
+	public void deactivate(Long id) {
+		Mascota mascota = findEntityById(id);
+		cancelFutureCitas(id);
+		mascota.setActive(false);
+		mascota.setUpdatedAt(LocalDateTime.now());
+		mascotaRepository.save(mascota);
+	}
+
+	private void cancelFutureCitas(Long mascotaId) {
+		List<Cita> futureCitas = citaRepository.findByMascotaIdAndFechaGreaterThanEqualAndEstadoIn(
+				mascotaId, LocalDate.now(), List.of(EstadoCita.PROGRAMADA, EstadoCita.CONFIRMADA));
+		for (Cita cita : futureCitas) {
+			cita.setEstado(EstadoCita.CANCELADA);
+		}
+		citaRepository.saveAll(futureCitas);
 	}
 
 	private Mascota findEntityById(Long id) {
@@ -158,6 +220,7 @@ public class MascotaService {
 				mascota.getColor(),
 				mascota.getPesoKg(),
 				mascota.getObservaciones(),
+				mascota.getFotoUrl(),
 				mascota.getActive(),
 				mascota.getCreatedAt(),
 				mascota.getUpdatedAt()

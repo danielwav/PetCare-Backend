@@ -72,4 +72,6 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 	);
 
 	List<Cita> findByEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(EstadoCita estado);
+
+	List<Cita> findByMascotaIdAndFechaGreaterThanEqualAndEstadoIn(Long mascotaId, LocalDate fecha, List<EstadoCita> estados);
 }
