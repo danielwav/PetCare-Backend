@@ -1,0 +1,33 @@
+package com.petcare.backend.domain.repository;
+
+import com.petcare.backend.persistence.entity.Inasistencia;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+public interface InasistenciaRepository extends JpaRepository<Inasistencia, Long> {
+
+	boolean existsByCitaId(Long citaId);
+
+	Optional<Inasistencia> findByCitaId(Long citaId);
+
+	@Query("""
+			select i from Inasistencia i
+			join fetch i.cita c
+			join fetch i.duenio d
+			join fetch i.mascota m
+			where (:duenioId is null or d.id = :duenioId)
+			and (:fechaInicio is null or i.fechaRegistro >= :fechaInicio)
+			and (:fechaFin is null or i.fechaRegistro <= :fechaFin)
+			order by i.fechaRegistro desc
+			""")
+	List<Inasistencia> search(
+			@Param("duenioId") Long duenioId,
+			@Param("fechaInicio") LocalDateTime fechaInicio,
+			@Param("fechaFin") LocalDateTime fechaFin
+	);
+}
