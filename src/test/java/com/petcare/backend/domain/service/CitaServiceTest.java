@@ -225,7 +225,8 @@ class CitaServiceTest {
 				LocalDate.now().minusYears(2),
 				"Marron",
 				new BigDecimal("12.50"),
-				"Sin observaciones"
+				"Sin observaciones",
+				null
 		));
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,

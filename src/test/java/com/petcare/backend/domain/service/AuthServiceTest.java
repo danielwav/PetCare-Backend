@@ -31,25 +31,25 @@ class AuthServiceTest {
 	private JwtService jwtService;
 
 	@Test
-	void registerFirstUserAsAdminAndLogin() {
+	void registerDuenioUserAndLogin() {
 		RegisterRequest registerRequest = new RegisterRequest(
-				"Administrador PetCare",
-				"admin@petcare.test",
-				"admin123"
+				"Duenio PetCare",
+				"duenio@petcare.test",
+				"duenio123"
 		);
 
 		AuthResponse registerResponse = authService.register(registerRequest);
-		AuthResponse loginResponse = authService.login(new LoginRequest("admin@petcare.test", "admin123"));
-		UserResponse currentUser = authService.me("admin@petcare.test");
+		AuthResponse loginResponse = authService.login(new LoginRequest("duenio@petcare.test", "duenio123"));
+		UserResponse currentUser = authService.me("duenio@petcare.test");
 
 		assertThat(registerResponse.accessToken()).isNotBlank();
 		assertThat(registerResponse.refreshToken()).isNotBlank();
 		assertThat(registerResponse.expiresInSeconds()).isEqualTo(3600);
-		assertThat(registerResponse.user().roles()).contains("ROLE_ADMIN");
+		assertThat(registerResponse.user().roles()).contains("ROLE_DUENIO");
 		assertThat(loginResponse.accessToken()).isNotBlank();
 		assertThat(loginResponse.refreshToken()).isNotBlank();
-		assertThat(currentUser.email()).isEqualTo("admin@petcare.test");
-		assertThat(currentUser.roles()).contains("ROLE_ADMIN");
+		assertThat(currentUser.email()).isEqualTo("duenio@petcare.test");
+		assertThat(currentUser.roles()).contains("ROLE_DUENIO");
 	}
 
 	@Test

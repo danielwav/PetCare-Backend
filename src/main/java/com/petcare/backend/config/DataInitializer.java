@@ -7,6 +7,7 @@ import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.persistence.enums.SexoMascota;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -32,12 +33,19 @@ public class DataInitializer implements CommandLineRunner {
     private final AsistenteRepository asistenteRepository;
     private final MascotaRepository mascotaRepository;
 
+    @Value("${app.seed-data.enabled:true}")
+    private boolean seedDataEnabled;
+
     @Override
     public void run(String... args) {
         createRoleIfMissing(RoleName.ROLE_ADMIN, "Administrador general del sistema.");
         createRoleIfMissing(RoleName.ROLE_VETERINARIO, "Personal medico veterinario.");
         createRoleIfMissing(RoleName.ROLE_ASISTENTE, "Personal operativo de recepcion y agenda.");
         createRoleIfMissing(RoleName.ROLE_DUENIO, "Cliente o propietario de mascota.");
+
+        if (!seedDataEnabled) {
+            return;
+        }
 
         if (usuarioRepository.findByEmail("admin@petcare.com").isPresent()) {
             return;
