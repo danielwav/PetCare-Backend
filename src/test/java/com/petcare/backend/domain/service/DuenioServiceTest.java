@@ -4,7 +4,6 @@ import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
-import com.petcare.backend.domain.repository.DuenioRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,9 +26,6 @@ class DuenioServiceTest {
 
 	@Autowired
 	private AuthService authService;
-
-	@Autowired
-	private DuenioRepository duenioRepository;
 
 	@Test
 	void createFindUpdateAndDeactivateDuenio() {
@@ -67,8 +63,6 @@ class DuenioServiceTest {
 
 	@Test
 	void searchDueniosByTextAndActiveStatus() {
-		duenioRepository.deleteAll();
-
 		duenioService.create(new DuenioRequest(
 				null,
 				"Carlos",
@@ -102,8 +96,6 @@ class DuenioServiceTest {
 
 	@Test
 	void rejectDuplicatedEmailAndDocument() {
-		duenioRepository.deleteAll();
-
 		duenioService.create(new DuenioRequest(
 				null,
 				"Ana",

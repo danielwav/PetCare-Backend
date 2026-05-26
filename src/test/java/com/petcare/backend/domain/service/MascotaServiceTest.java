@@ -39,7 +39,7 @@ class MascotaServiceTest {
 	void createFindUpdateAndDeactivateMascota() {
 		DuenioResponse duenio = createDuenio("71000001", "mascota.duenio@test.com");
 
-		MascotaResponse created = mascotaService.create(new MascotaRequest(
+			MascotaResponse created = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				"Luna",
 				"Perro",
@@ -48,7 +48,8 @@ class MascotaServiceTest {
 				LocalDate.of(2022, 5, 10),
 				"Dorado",
 				new BigDecimal("18.50"),
-				"Vacunas al dia"
+				"Vacunas al dia",
+				null
 		));
 
 		MascotaResponse found = mascotaService.findById(created.id());
@@ -61,7 +62,8 @@ class MascotaServiceTest {
 				LocalDate.of(2022, 5, 10),
 				"Dorado",
 				new BigDecimal("19.20"),
-				"Control mensual pendiente"
+				"Control mensual pendiente",
+				null
 		));
 
 		mascotaService.deactivate(created.id());
@@ -89,6 +91,7 @@ class MascotaServiceTest {
 				LocalDate.of(2021, 2, 12),
 				"Crema",
 				new BigDecimal("4.80"),
+				null,
 				null
 		));
 		mascotaService.create(new MascotaRequest(
@@ -100,6 +103,7 @@ class MascotaServiceTest {
 				LocalDate.of(2020, 9, 3),
 				"Tricolor",
 				new BigDecimal("12.00"),
+				null,
 				null
 		));
 
@@ -124,6 +128,7 @@ class MascotaServiceTest {
 				"Mestizo",
 				SexoMascota.HEMBRA,
 				LocalDate.of(2023, 1, 8),
+				null,
 				null,
 				null,
 				null
@@ -178,6 +183,7 @@ class MascotaServiceTest {
 				LocalDate.now().minusYears(1),
 				null,
 				new BigDecimal("8.50"),
+				null,
 				null
 		));
 	}
