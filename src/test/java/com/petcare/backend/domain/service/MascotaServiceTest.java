@@ -39,7 +39,7 @@ class MascotaServiceTest {
 	void createFindUpdateAndDeactivateMascota() {
 		DuenioResponse duenio = createDuenio("71000001", "mascota.duenio@test.com");
 
-		MascotaResponse created = mascotaService.create(new MascotaRequest(
+			MascotaResponse created = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				"Luna",
 				"Perro",
