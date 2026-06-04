@@ -30,6 +30,11 @@ public class ServicioController {
 
 	private final ServicioService servicioService;
 
+	@GetMapping("/test")
+	public String test() {
+		return "ServicioController alive";
+	}
+
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ServicioResponse create(@Valid @RequestBody ServicioRequest request) {
