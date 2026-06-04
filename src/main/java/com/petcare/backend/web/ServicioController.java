@@ -36,11 +36,8 @@ public class ServicioController {
 	}
 
 	@GetMapping("/api/servicios")
-	public List<ServicioResponse> findAll(
-			@RequestParam(required = false) String search,
-			@RequestParam(required = false) Boolean active
-	) {
-		return servicioService.findAll(search, active);
+	public List<ServicioResponse> findAll() {
+		return servicioService.findAll(null, null);
 	}
 
 	@GetMapping("/api/servicios/{id}")
