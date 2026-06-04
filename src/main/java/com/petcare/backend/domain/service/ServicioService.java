@@ -45,9 +45,7 @@ public class ServicioService {
 
 	@Transactional(readOnly = true)
 	public List<ServicioResponse> findAll(String search, Boolean active) {
-		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
-		Boolean activeFilter = active == null ? true : active;
-		return servicioRepository.search(normalizedSearch, activeFilter).stream()
+		return servicioRepository.findByActiveTrueOrderByNombreAsc().stream()
 				.map(this::toResponse)
 				.toList();
 	}
