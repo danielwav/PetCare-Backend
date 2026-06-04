@@ -37,13 +37,11 @@ public class ServicioController {
 
 	@GetMapping("/api/servicios")
 	public List<ServicioResponse> findAll() {
-		var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-		System.out.println("=== DEBUG findAll ===");
-		System.out.println("Authenticated: " + (auth != null ? auth.isAuthenticated() : "null"));
-		if (auth != null) {
-			System.out.println("Name: " + auth.getName());
-			System.out.println("Authorities: " + auth.getAuthorities());
-		}
+		return servicioService.findAll(null, null);
+	}
+
+	@GetMapping("/api/servicios/all")
+	public List<ServicioResponse> findAllPublic() {
 		return servicioService.findAll(null, null);
 	}
 
