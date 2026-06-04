@@ -66,7 +66,7 @@ public class Mascota {
 	private String observaciones;
 
 	@Lob
-	@Column(columnDefinition = "MEDIUMTEXT")
+	@Column(columnDefinition = "TEXT")
 	private String fotoUrl;
 
 	@Column(nullable = false)
