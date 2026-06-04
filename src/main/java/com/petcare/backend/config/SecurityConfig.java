@@ -35,7 +35,20 @@ public class SecurityConfig {
 								"/actuator/health",
 								"/swagger-ui.html",
 								"/swagger-ui/**",
-								"/v3/api-docs/**"
+								"/v3/api-docs/**",
+								"/api/servicios",
+								"/api/veterinarios",
+								"/api/asistentes",
+								"/api/alertas/**",
+								"/api/vacunas",
+								"/api/citas",
+								"/api/mascotas",
+								"/api/duenios",
+								"/api/usuarios",
+								"/api/inasistencias",
+								"/api/reportes/**",
+								"/api/controles-mensuales/**",
+								"/api/atenciones/**"
 						).permitAll()
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
