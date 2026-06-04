@@ -37,10 +37,6 @@ public class SecurityConfig {
 								"/swagger-ui/**",
 								"/v3/api-docs/**"
 						).permitAll()
-						.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/servicios", "/api/servicios/calcular-costo").hasRole("ADMIN")
-						.requestMatchers(org.springframework.http.HttpMethod.GET, "/api/servicios", "/api/servicios/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
-						.requestMatchers(org.springframework.http.HttpMethod.GET, "/api/veterinarios", "/api/veterinarios/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
-						.requestMatchers(org.springframework.http.HttpMethod.GET, "/api/asistentes", "/api/asistentes/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
