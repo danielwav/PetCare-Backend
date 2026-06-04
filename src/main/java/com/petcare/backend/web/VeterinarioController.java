@@ -36,7 +36,6 @@ public class VeterinarioController {
 	}
 
 	@GetMapping("/api/veterinarios")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<VeterinarioResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active

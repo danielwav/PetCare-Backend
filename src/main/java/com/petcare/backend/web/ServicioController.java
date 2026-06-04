@@ -36,7 +36,6 @@ public class ServicioController {
 	}
 
 	@GetMapping("/api/servicios")
-	@PreAuthorize("hasRole('ADMIN') or hasRole('ASISTENTE') or hasRole('VETERINARIO')")
 	public List<ServicioResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active

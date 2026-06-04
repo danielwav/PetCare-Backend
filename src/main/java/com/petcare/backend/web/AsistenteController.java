@@ -34,7 +34,6 @@ public class AsistenteController {
 	}
 
 	@GetMapping("/api/asistentes")
-	@PreAuthorize("hasRole('ADMIN')")
 	public List<AsistenteResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active
