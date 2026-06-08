@@ -16,19 +16,6 @@ public interface VeterinarioRepository extends JpaRepository<Veterinario, Long> 
 
 	Optional<Veterinario> findByUsuarioId(Long usuarioId);
 
-	@Query("""
-			select distinct v from Veterinario v
-			left join fetch v.horarios h
-			where (:active is null or v.active = :active)
-			and (
-				:search is null
-				or lower(v.nombres) like lower(concat('%', :search, '%'))
-				or lower(v.apellidos) like lower(concat('%', :search, '%'))
-				or lower(v.email) like lower(concat('%', :search, '%'))
-				or lower(v.especialidad) like lower(concat('%', :search, '%'))
-				or v.numeroColegiatura like concat('%', :search, '%')
-			)
-			order by v.apellidos asc, v.nombres asc
-			""")
+	@Query(value = "select distinct v.* from veterinarios v left join horarios_veterinarios h on h.veterinario_id = v.id where (:active is null or v.active = :active) and (:search is null or upper(v.nombres) like upper('%' || :search || '%') or upper(v.apellidos) like upper('%' || :search || '%') or upper(v.email) like upper('%' || :search || '%') or upper(v.especialidad) like upper('%' || :search || '%') or v.numero_colegiatura like ('%' || :search || '%')) order by v.apellidos asc, v.nombres asc", nativeQuery = true)
 	List<Veterinario> search(@Param("search") String search, @Param("active") Boolean active);
 }
