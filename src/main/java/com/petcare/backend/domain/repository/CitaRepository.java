@@ -19,9 +19,9 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			join fetch c.veterinario v
 			where (cast(:estado as string) is null or c.estado = :estado)
 			and (cast(:fecha as date) is null or c.fecha = :fecha)
-			and (cast(:duenioId as bigint) is null or d.id = :duenioId)
-			and (cast(:mascotaId as bigint) is null or m.id = :mascotaId)
-			and (cast(:veterinarioId as bigint) is null or v.id = :veterinarioId)
+			and (cast(:duenioId as long) is null or d.id = :duenioId)
+			and (cast(:mascotaId as long) is null or m.id = :mascotaId)
+			and (cast(:veterinarioId as long) is null or v.id = :veterinarioId)
 			order by c.fecha asc, c.horaInicio asc
 			""")
 	List<Cita> search(
@@ -40,9 +40,9 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			where (cast(:estado as string) is null or c.estado = :estado)
 			and (cast(:fechaInicio as date) is null or c.fecha >= :fechaInicio)
 			and (cast(:fechaFin as date) is null or c.fecha <= :fechaFin)
-			and (cast(:duenioId as bigint) is null or d.id = :duenioId)
-			and (cast(:mascotaId as bigint) is null or m.id = :mascotaId)
-			and (cast(:veterinarioId as bigint) is null or v.id = :veterinarioId)
+			and (cast(:duenioId as long) is null or d.id = :duenioId)
+			and (cast(:mascotaId as long) is null or m.id = :mascotaId)
+			and (cast(:veterinarioId as long) is null or v.id = :veterinarioId)
 			order by c.fecha asc, c.horaInicio asc
 			""")
 	List<Cita> searchByDateRange(
@@ -59,7 +59,7 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			where c.veterinario.id = :veterinarioId
 			and c.fecha = :fecha
 			and c.estado <> com.petcare.backend.persistence.enums.EstadoCita.CANCELADA
-			and (cast(:currentCitaId as bigint) is null or c.id <> :currentCitaId)
+			and (cast(:currentCitaId as long) is null or c.id <> :currentCitaId)
 			and c.horaInicio < :horaFin
 			and c.horaFin > :horaInicio
 			""")
