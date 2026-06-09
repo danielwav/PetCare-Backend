@@ -34,11 +34,11 @@ public class SecurityConfig {
 						.requestMatchers(
 								"/api/auth/**",
 								"/api/health",
-								"/api/alertas/**",
 								"/swagger-ui.html",
 								"/swagger-ui/**",
 								"/v3/api-docs/**"
 						).permitAll()
+						.requestMatchers("/api/alertas/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
