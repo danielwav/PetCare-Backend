@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequiredArgsConstructor
 public class AlertaController {
@@ -18,7 +20,7 @@ public class AlertaController {
     private final AlertaService alertaService;
 
     @GetMapping("/api/alertas/dia")
-    public ResponseEntity<PanelAlertasDiaResponse> getDailyPanel() {
+    public ResponseEntity<?> getDailyPanel() {
         log.info("Solicitando alertas del día");
         try {
             PanelAlertasDiaResponse panel = alertaService.getDailyPanel(null, null);
@@ -29,7 +31,8 @@ public class AlertaController {
             return ResponseEntity.ok(panel);
         } catch (Exception e) {
             log.error("Error al generar alertas del día: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getClass().getSimpleName(), "message", e.getMessage()));
         }
     }
 }
