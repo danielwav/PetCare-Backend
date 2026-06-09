@@ -12,15 +12,6 @@ public interface VacunaRepository extends JpaRepository<Vacuna, Long> {
 
 	Optional<Vacuna> findByNombreIgnoreCase(String nombre);
 
-	@Query("""
-			select v from Vacuna v
-			where (:active is null or v.active = :active)
-			and (
-				:search is null
-				or lower(v.nombre) like lower(concat('%', :search, '%'))
-				or lower(v.descripcion) like lower(concat('%', :search, '%'))
-			)
-			order by v.nombre asc
-			""")
+	@Query(value = "select v.* from vacunas v where (:active is null or v.active = :active) and (:search is null or upper(v.nombre) like upper('%' || :search || '%') or upper(v.descripcion) like upper('%' || :search || '%')) order by v.nombre asc", nativeQuery = true)
 	List<Vacuna> search(@Param("search") String search, @Param("active") Boolean active);
 }
