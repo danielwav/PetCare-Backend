@@ -19,7 +19,8 @@ public class CorsConfig {
                 "http://127.0.0.1:*",
                 "https://*.onrender.com",
                 "https://*.vercel.app",
-                "https://*.netlify.app"
+                "https://*.netlify.app",
+                "https://*.github.io"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
