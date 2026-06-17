@@ -12,5 +12,6 @@ public interface ServicioRepository extends JpaRepository<Servicio, Long> {
 
 	Optional<Servicio> findByNombreIgnoreCase(String nombre);
 
-	List<Servicio> findByActiveTrueOrderByNombreAsc();
+	@Query(value = "select * from servicios where (:active is null or active = :active) and (:search is null or upper(nombre) like upper('%' || :search || '%') or upper(descripcion) like upper('%' || :search || '%')) order by nombre asc", nativeQuery = true)
+	List<Servicio> search(@Param("search") String search, @Param("active") Boolean active);
 }

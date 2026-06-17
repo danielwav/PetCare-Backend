@@ -12,6 +12,7 @@ public record CitaResponse(
 		Long id,
 		Long duenioId,
 		String duenioNombreCompleto,
+		String duenioTelefono,
 		Long mascotaId,
 		String mascotaNombre,
 		Long veterinarioId,

@@ -16,18 +16,6 @@ public interface AsistenteRepository extends JpaRepository<Asistente, Long> {
 
 	Optional<Asistente> findByUsuarioId(Long usuarioId);
 
-	@Query("""
-			select a from Asistente a
-			where (:active is null or a.active = :active)
-			and (
-				:search is null
-				or lower(a.nombres) like lower(concat('%', :search, '%'))
-				or lower(a.apellidos) like lower(concat('%', :search, '%'))
-				or lower(a.email) like lower(concat('%', :search, '%'))
-				or lower(a.funciones) like lower(concat('%', :search, '%'))
-				or a.numeroDocumento like concat('%', :search, '%')
-			)
-			order by a.apellidos asc, a.nombres asc
-			""")
+	@Query(value = "select a.* from asistentes a where (:active is null or a.active = :active) and (:search is null or upper(a.nombres) like upper('%' || :search || '%') or upper(a.apellidos) like upper('%' || :search || '%') or upper(a.email) like upper('%' || :search || '%') or upper(a.funciones) like upper('%' || :search || '%') or a.numero_documento like ('%' || :search || '%')) order by a.apellidos asc, a.nombres asc", nativeQuery = true)
 	List<Asistente> search(@Param("search") String search, @Param("active") Boolean active);
 }
