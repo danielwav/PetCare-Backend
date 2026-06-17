@@ -9,6 +9,7 @@ public record AlertaCitaResponse(
 		Long citaId,
 		Long duenioId,
 		String duenioNombreCompleto,
+		String duenioTelefono,
 		Long mascotaId,
 		String mascotaNombre,
 		Long veterinarioId,
