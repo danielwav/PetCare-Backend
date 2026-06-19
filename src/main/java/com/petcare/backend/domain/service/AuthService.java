@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -132,6 +134,26 @@ public class AuthService {
 		usuarioRepository.save(usuario);
 		emailService.sendActivationEmail(email, fullName, token);
 		return token;
+	}
+
+	@Transactional(readOnly = true)
+	public Map<String, Object> validateActivationToken(String token) {
+		Usuario usuario = usuarioRepository.findByActivationToken(token)
+				.orElse(null);
+
+		if (usuario == null) {
+			return Map.of("valid", false, "reason", "INVALID_TOKEN");
+		}
+
+		if (usuario.getTokenExpiry() == null || usuario.getTokenExpiry().isBefore(LocalDateTime.now())) {
+			return Map.of("valid", false, "reason", "EXPIRED_TOKEN");
+		}
+
+		if (usuario.getActive()) {
+			return Map.of("valid", false, "reason", "ALREADY_ACTIVE");
+		}
+
+		return Map.of("valid", true, "email", usuario.getEmail(), "nombre", usuario.getFullName());
 	}
 
 	@Transactional

@@ -53,6 +53,17 @@ public class AuthController {
 		return authService.me(authentication.getName());
 	}
 
+	@GetMapping("/activate-account")
+	public Map<String, Object> validateActivationToken(@RequestParam String token) {
+		return authService.validateActivationToken(token);
+	}
+
+	@PostMapping("/set-password")
+	public Map<String, String> setPassword(@Valid @RequestBody com.petcare.backend.domain.dto.request.SetPasswordRequest request) {
+		authService.activateWithToken(request.token(), request.password());
+		return Map.of("message", "Cuenta activada exitosamente. Ya puedes iniciar sesión.");
+	}
+
 	@PostMapping("/activate/{token}")
 	public Map<String, String> activateWithToken(@PathVariable String token, @RequestParam String password) {
 		authService.activateWithToken(token, password);
