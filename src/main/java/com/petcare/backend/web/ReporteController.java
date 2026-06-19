@@ -4,6 +4,7 @@ import com.petcare.backend.domain.dto.response.HistoriaClinicaResponse;
 import com.petcare.backend.domain.dto.response.InasistenciaResponse;
 import com.petcare.backend.domain.dto.response.ReporteCitaResponse;
 import com.petcare.backend.domain.dto.response.ReporteCostoCitaResponse;
+import com.petcare.backend.domain.dto.response.ReporteServicioResponse;
 import com.petcare.backend.domain.dto.response.ServicioSolicitadoResponse;
 import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.service.ReporteService;
@@ -61,6 +62,12 @@ public class ReporteController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public ReporteCostoCitaResponse findCostoCita(@PathVariable Long id) {
 		return reporteService.findCostoCita(id);
+	}
+
+	@GetMapping("/api/reportes/servicios")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ReporteServicioResponse findReporteServicios() {
+		return reporteService.findReporteServicios();
 	}
 
 	@GetMapping("/api/reportes/servicios-mas-solicitados")

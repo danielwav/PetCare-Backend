@@ -74,7 +74,7 @@ public class UsuarioService {
         return toUserResponse(usuarioRepository.save(usuario));
     }
 
-    private Usuario findUsuario(Long id) {
+    public Usuario findUsuario(Long id) {
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
     }
