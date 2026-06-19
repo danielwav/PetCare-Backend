@@ -19,8 +19,7 @@ public class ResendConfig {
     @Value("${FRONTEND_URL:}")
     private String frontendUrl;
 
-    @Value("${RESEND_API_URL:https://api.resend.com/emails}")
-    private String apiUrl;
+    private String apiUrl = "https://api.resend.com/emails";
 
     @Value("${RESEND_FROM_EMAIL:onboarding@resend.dev}")
     private String fromEmail;
