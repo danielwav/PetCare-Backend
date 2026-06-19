@@ -191,7 +191,32 @@ public class AuthService {
 		}
 
 		duenioRepository.findByEmail(usuario.getEmail())
-				.ifPresent(duenio -> linkDuenioToUser(duenio, usuario));
+				.ifPresentOrElse(
+						duenio -> linkDuenioToUser(duenio, usuario),
+						() -> createDuenioForUser(usuario)
+				);
+	}
+
+	@Transactional
+	protected void createDuenioForUser(Usuario usuario) {
+		String fullName = usuario.getFullName();
+		String[] parts = fullName.trim().split("\\s+", 2);
+		String nombres = parts[0];
+		String apellidos = parts.length > 1 ? parts[1] : "";
+
+		Duenio duenio = Duenio.builder()
+				.usuario(usuario)
+				.nombres(nombres)
+				.apellidos(apellidos)
+				.tipoDocumento("PENDIENTE")
+				.numeroDocumento("PENDIENTE-" + usuario.getId())
+				.telefono("000000000")
+				.email(usuario.getEmail())
+				.active(true)
+				.createdAt(LocalDateTime.now())
+				.updatedAt(LocalDateTime.now())
+				.build();
+		duenioRepository.save(duenio);
 	}
 
 	private void linkDuenioToUser(Duenio duenio, Usuario usuario) {
