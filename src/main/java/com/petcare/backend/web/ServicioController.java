@@ -8,7 +8,6 @@ import com.petcare.backend.domain.service.ServicioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -41,22 +40,42 @@ public class ServicioController {
 		return servicioService.create(request);
 	}
 
+<<<<<<< HEAD
 	@GetMapping
 	public List<ServicioResponse> findAll() {
 		return servicioService.findAll(null, null);
 	}
 
 	@GetMapping("/{id}")
+=======
+	@GetMapping("/api/servicios")
+	public List<ServicioResponse> findAll(
+			@RequestParam(required = false) String search,
+			@RequestParam(required = false) Boolean active
+	) {
+		return servicioService.findAll(search, active);
+	}
+
+	@GetMapping("/api/servicios/{id}")
+>>>>>>> prueba
 	public ServicioResponse findById(@PathVariable Long id) {
 		return servicioService.findById(id);
 	}
 
+<<<<<<< HEAD
 	@PutMapping("/{id}")
+=======
+	@PutMapping("/api/servicios/{id}")
+>>>>>>> prueba
 	public ServicioResponse update(@PathVariable Long id, @Valid @RequestBody ServicioRequest request) {
 		return servicioService.update(id, request);
 	}
 
+<<<<<<< HEAD
 	@PatchMapping("/{id}/activar")
+=======
+	@PatchMapping("/api/servicios/{id}/activar")
+>>>>>>> prueba
 	public ServicioResponse activate(@PathVariable Long id) {
 		return servicioService.activate(id);
 	}
@@ -67,7 +86,11 @@ public class ServicioController {
 		servicioService.deactivate(id);
 	}
 
+<<<<<<< HEAD
 	@PostMapping("/calcular-costo")
+=======
+	@PostMapping("/api/servicios/calcular-costo")
+>>>>>>> prueba
 	public CalculoCostoCitaResponse calculateCost(@Valid @RequestBody CalculoCostoCitaRequest request) {
 		return servicioService.calculateCost(request);
 	}

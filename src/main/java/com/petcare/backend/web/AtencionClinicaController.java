@@ -7,7 +7,6 @@ import com.petcare.backend.domain.service.AtencionClinicaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,7 +22,6 @@ public class AtencionClinicaController {
 
 	@PostMapping("/api/citas/{id}/atencion")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public AtencionClinicaResponse register(
 			@PathVariable Long id,
 			@Valid @RequestBody AtencionClinicaRequest request
@@ -32,13 +30,11 @@ public class AtencionClinicaController {
 	}
 
 	@GetMapping("/api/mascotas/{id}/historia-clinica")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public HistoriaClinicaResponse findHistoriaClinicaByMascota(@PathVariable Long id) {
 		return atencionClinicaService.findHistoriaClinicaByMascota(id);
 	}
 
 	@GetMapping("/api/atenciones/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public AtencionClinicaResponse findById(@PathVariable Long id) {
 		return atencionClinicaService.findById(id);
 	}

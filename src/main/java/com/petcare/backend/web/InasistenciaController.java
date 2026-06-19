@@ -6,7 +6,6 @@ import com.petcare.backend.domain.service.InasistenciaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -25,7 +24,6 @@ public class InasistenciaController {
 	private final InasistenciaService inasistenciaService;
 
 	@PatchMapping("/api/citas/{id}/inasistencia")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public InasistenciaResponse register(
 			@PathVariable Long id,
 			@Valid @RequestBody InasistenciaRequest request,
@@ -36,7 +34,6 @@ public class InasistenciaController {
 	}
 
 	@GetMapping("/api/inasistencias")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<InasistenciaResponse> findAll(
 			@RequestParam(required = false) Long duenioId,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
@@ -46,7 +43,6 @@ public class InasistenciaController {
 	}
 
 	@GetMapping("/api/inasistencias/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public InasistenciaResponse findById(@PathVariable Long id) {
 		return inasistenciaService.findById(id);
 	}

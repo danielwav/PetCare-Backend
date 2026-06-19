@@ -8,7 +8,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,7 +29,6 @@ public class VeterinarioController {
 
 	@PostMapping("/api/veterinarios")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasRole('ADMIN')")
 	public VeterinarioResponse create(@Valid @RequestBody VeterinarioRequest request) {
 		return veterinarioService.create(request);
 	}
@@ -44,13 +42,11 @@ public class VeterinarioController {
 	}
 
 	@GetMapping("/api/veterinarios/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public VeterinarioResponse findById(@PathVariable Long id) {
 		return veterinarioService.findById(id);
 	}
 
 	@GetMapping("/api/veterinarios/{id}/disponibilidad")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public DisponibilidadVeterinarioResponse findDisponibilidad(
 			@PathVariable Long id,
 			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
@@ -60,14 +56,12 @@ public class VeterinarioController {
 	}
 
 	@PutMapping("/api/veterinarios/{id}")
-	@PreAuthorize("hasRole('ADMIN')")
 	public VeterinarioResponse update(@PathVariable Long id, @Valid @RequestBody VeterinarioRequest request) {
 		return veterinarioService.update(id, request);
 	}
 
 	@DeleteMapping("/api/veterinarios/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("hasRole('ADMIN')")
 	public void deactivate(@PathVariable Long id) {
 		veterinarioService.deactivate(id);
 	}
