@@ -29,11 +29,6 @@ public class ServicioController {
 
 	private final ServicioService servicioService;
 
-	@GetMapping("/test")
-	public String test() {
-		return "ServicioController alive";
-	}
-
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ServicioResponse create(@Valid @RequestBody ServicioRequest request) {
@@ -41,12 +36,6 @@ public class ServicioController {
 	}
 
 	@GetMapping
-	public List<ServicioResponse> findAll() {
-		return servicioService.findAll(null, null);
-	}
-
-	@GetMapping("/{id}")
-	@GetMapping("/api/servicios")
 	public List<ServicioResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active
@@ -54,19 +43,17 @@ public class ServicioController {
 		return servicioService.findAll(search, active);
 	}
 
-	@GetMapping("/api/servicios/{id}")
+	@GetMapping("/{id}")
 	public ServicioResponse findById(@PathVariable Long id) {
 		return servicioService.findById(id);
 	}
 
 	@PutMapping("/{id}")
-	@PutMapping("/api/servicios/{id}")
 	public ServicioResponse update(@PathVariable Long id, @Valid @RequestBody ServicioRequest request) {
 		return servicioService.update(id, request);
 	}
 
 	@PatchMapping("/{id}/activar")
-	@PatchMapping("/api/servicios/{id}/activar")
 	public ServicioResponse activate(@PathVariable Long id) {
 		return servicioService.activate(id);
 	}
@@ -78,7 +65,6 @@ public class ServicioController {
 	}
 
 	@PostMapping("/calcular-costo")
-	@PostMapping("/api/servicios/calcular-costo")
 	public CalculoCostoCitaResponse calculateCost(@Valid @RequestBody CalculoCostoCitaRequest request) {
 		return servicioService.calculateCost(request);
 	}
