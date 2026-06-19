@@ -39,50 +39,47 @@ public class SecurityConfig {
 						).permitAll()
 
 						/* === ADMIN only === */
-						.requestMatchers(HttpMethod.POST,   "/api/usuarios/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.GET,    "/api/usuarios/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.PUT,    "/api/usuarios/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.DELETE, "/api/usuarios/**").hasRole("ADMIN")
+						.requestMatchers("/api/usuarios/**").hasAuthority("ROLE_ADMIN")
 
-						.requestMatchers(HttpMethod.POST,   "/api/asistentes/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.GET,    "/api/asistentes/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.PUT,    "/api/asistentes/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.DELETE, "/api/asistentes/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST,   "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
+						.requestMatchers(HttpMethod.GET,    "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
+						.requestMatchers(HttpMethod.PUT,    "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
 
-						.requestMatchers(HttpMethod.POST,   "/api/veterinarios/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.GET,    "/api/veterinarios/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
-						.requestMatchers(HttpMethod.PUT,    "/api/veterinarios/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.DELETE, "/api/veterinarios/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST,   "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
+						.requestMatchers(HttpMethod.GET,    "/api/veterinarios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
+						.requestMatchers(HttpMethod.PUT,    "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
 
-						.requestMatchers(HttpMethod.GET,    "/api/duenios/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO", "DUENIO")
-						.requestMatchers(HttpMethod.POST,   "/api/duenios/**").hasAnyRole("ADMIN", "ASISTENTE")
-						.requestMatchers(HttpMethod.PUT,    "/api/duenios/**").hasAnyRole("ADMIN", "ASISTENTE", "DUENIO")
-						.requestMatchers(HttpMethod.DELETE, "/api/duenios/**").hasAnyRole("ADMIN", "ASISTENTE")
+						.requestMatchers(HttpMethod.GET,    "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
+						.requestMatchers(HttpMethod.POST,   "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.PUT,    "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_DUENIO")
+						.requestMatchers(HttpMethod.DELETE, "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE")
 
-						.requestMatchers(HttpMethod.POST,   "/api/mascotas/**").hasAnyRole("ADMIN", "ASISTENTE", "DUENIO")
-						.requestMatchers(HttpMethod.GET,    "/api/mascotas/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO", "DUENIO")
-						.requestMatchers(HttpMethod.PUT,    "/api/mascotas/**").hasAnyRole("ADMIN", "ASISTENTE", "DUENIO")
-						.requestMatchers(HttpMethod.DELETE, "/api/mascotas/**").hasAnyRole("ADMIN", "ASISTENTE", "DUENIO")
+						.requestMatchers(HttpMethod.POST,   "/api/mascotas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_DUENIO")
+						.requestMatchers(HttpMethod.GET,    "/api/mascotas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
+						.requestMatchers(HttpMethod.PUT,    "/api/mascotas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_DUENIO")
+						.requestMatchers(HttpMethod.DELETE, "/api/mascotas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_DUENIO")
 
-						.requestMatchers("/api/citas/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO", "DUENIO")
+						.requestMatchers("/api/citas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
 
-						.requestMatchers("/api/alertas/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/alertas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
-						.requestMatchers("/api/vacunas/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO", "DUENIO")
+						.requestMatchers("/api/vacunas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
 
-						.requestMatchers("/api/servicios/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/servicios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
-						.requestMatchers("/api/atencion-clinica/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO", "DUENIO")
+						.requestMatchers("/api/atencion-clinica/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
 
-						.requestMatchers("/api/controles-mensuales/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/controles-mensuales/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
-						.requestMatchers("/api/inasistencias/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/inasistencias/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
-						.requestMatchers("/api/reportes/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/reportes/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
-						.requestMatchers("/api/horarios-semanales/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/horarios-semanales/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
-						.requestMatchers("/api/notas-seguimiento/**").hasAnyRole("ADMIN", "ASISTENTE", "VETERINARIO")
+						.requestMatchers("/api/notas-seguimiento/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
 
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
