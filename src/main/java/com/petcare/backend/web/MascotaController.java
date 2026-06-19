@@ -6,7 +6,6 @@ import com.petcare.backend.domain.service.MascotaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,7 +28,6 @@ public class MascotaController {
 
 	@PostMapping("/api/mascotas")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public MascotaResponse create(@Valid @RequestBody MascotaRequest request, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.createForDuenio(authentication.getName(), request);
@@ -38,7 +36,6 @@ public class MascotaController {
 	}
 
 	@GetMapping("/api/mascotas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<MascotaResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Long duenioId,
@@ -52,7 +49,6 @@ public class MascotaController {
 	}
 
 	@GetMapping("/api/duenios/{duenioId}/mascotas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<MascotaResponse> findByDuenio(@PathVariable Long duenioId, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.findByDuenioForDuenio(authentication.getName(), duenioId);
@@ -61,7 +57,6 @@ public class MascotaController {
 	}
 
 	@GetMapping("/api/mascotas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public MascotaResponse findById(@PathVariable Long id, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.findByIdForDuenio(id, authentication.getName());
@@ -70,7 +65,6 @@ public class MascotaController {
 	}
 
 	@PutMapping("/api/mascotas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public MascotaResponse update(@PathVariable Long id, @Valid @RequestBody MascotaRequest request, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.updateForDuenio(id, request, authentication.getName());
@@ -80,7 +74,6 @@ public class MascotaController {
 
 	@DeleteMapping("/api/mascotas/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public void deactivate(@PathVariable Long id, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			mascotaService.deactivateForDuenio(id, authentication.getName());

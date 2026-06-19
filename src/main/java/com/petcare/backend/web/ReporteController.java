@@ -11,7 +11,6 @@ import com.petcare.backend.domain.service.ReporteService;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,7 +26,6 @@ public class ReporteController {
 	private final ReporteService reporteService;
 
 	@GetMapping("/api/reportes/citas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<ReporteCitaResponse> findCitas(
 			@RequestParam(required = false) EstadoCita estado,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
@@ -40,7 +38,6 @@ public class ReporteController {
 	}
 
 	@GetMapping("/api/reportes/inasistencias")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<InasistenciaResponse> findInasistencias(
 			@RequestParam(required = false) Long duenioId,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
@@ -50,7 +47,6 @@ public class ReporteController {
 	}
 
 	@GetMapping("/api/reportes/vacunas-proximas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<VacunaMascotaResponse> findVacunasProximas(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
@@ -59,19 +55,16 @@ public class ReporteController {
 	}
 
 	@GetMapping("/api/reportes/citas/{id}/costos")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public ReporteCostoCitaResponse findCostoCita(@PathVariable Long id) {
 		return reporteService.findCostoCita(id);
 	}
 
 	@GetMapping("/api/reportes/servicios")
-	@PreAuthorize("hasRole('ADMIN')")
 	public ReporteServicioResponse findReporteServicios() {
 		return reporteService.findReporteServicios();
 	}
 
 	@GetMapping("/api/reportes/servicios-mas-solicitados")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public List<ServicioSolicitadoResponse> findServiciosMasSolicitados(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
@@ -80,7 +73,6 @@ public class ReporteController {
 	}
 
 	@GetMapping("/api/reportes/mascotas/{id}/historia-clinica")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public HistoriaClinicaResponse findHistoriaClinica(@PathVariable Long id) {
 		return reporteService.findHistoriaClinica(id);
 	}

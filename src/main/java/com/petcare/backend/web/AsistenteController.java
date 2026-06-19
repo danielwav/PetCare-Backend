@@ -6,7 +6,6 @@ import com.petcare.backend.domain.service.AsistenteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -28,13 +27,11 @@ public class AsistenteController {
 
 	@PostMapping("/api/asistentes")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasRole('ADMIN')")
 	public AsistenteResponse create(@Valid @RequestBody AsistenteRequest request) {
 		return asistenteService.create(request);
 	}
 
 	@GetMapping("/api/asistentes")
-	@PreAuthorize("hasRole('ADMIN')")
 	public List<AsistenteResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active
@@ -43,26 +40,22 @@ public class AsistenteController {
 	}
 
 	@GetMapping("/api/asistentes/{id}")
-	@PreAuthorize("hasRole('ADMIN')")
 	public AsistenteResponse findById(@PathVariable Long id) {
 		return asistenteService.findById(id);
 	}
 
 	@PutMapping("/api/asistentes/{id}")
-	@PreAuthorize("hasRole('ADMIN')")
 	public AsistenteResponse update(@PathVariable Long id, @Valid @RequestBody AsistenteRequest request) {
 		return asistenteService.update(id, request);
 	}
 
 	@PatchMapping("/api/asistentes/{id}/activar")
-	@PreAuthorize("hasRole('ADMIN')")
 	public AsistenteResponse activate(@PathVariable Long id) {
 		return asistenteService.activate(id);
 	}
 
 	@DeleteMapping("/api/asistentes/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("hasRole('ADMIN')")
 	public void deactivate(@PathVariable Long id) {
 		asistenteService.deactivate(id);
 	}

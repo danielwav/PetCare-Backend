@@ -6,7 +6,6 @@ import com.petcare.backend.domain.service.ControlMensualMascotaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,7 +24,6 @@ public class ControlMensualMascotaController {
 
 	@PostMapping("/api/mascotas/{id}/controles-mensuales")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public ControlMensualMascotaResponse create(
 			@PathVariable Long id,
 			@Valid @RequestBody ControlMensualMascotaRequest request
@@ -34,19 +32,16 @@ public class ControlMensualMascotaController {
 	}
 
 	@GetMapping("/api/mascotas/{id}/controles-mensuales")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<ControlMensualMascotaResponse> findByMascota(@PathVariable Long id) {
 		return controlMensualMascotaService.findByMascota(id);
 	}
 
 	@GetMapping("/api/controles-mensuales/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public ControlMensualMascotaResponse findById(@PathVariable Long id) {
 		return controlMensualMascotaService.findById(id);
 	}
 
 	@PutMapping("/api/controles-mensuales/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public ControlMensualMascotaResponse update(
 			@PathVariable Long id,
 			@Valid @RequestBody ControlMensualMascotaRequest request

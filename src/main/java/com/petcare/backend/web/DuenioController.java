@@ -6,7 +6,6 @@ import com.petcare.backend.domain.service.DuenioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,13 +29,11 @@ public class DuenioController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public DuenioResponse create(@Valid @RequestBody DuenioRequest request) {
 		return duenioService.create(request);
 	}
 
 	@GetMapping
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<DuenioResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active,
@@ -49,13 +46,11 @@ public class DuenioController {
 	}
 
 	@GetMapping("/me")
-	@PreAuthorize("hasRole('DUENIO')")
 	public DuenioResponse findMe(Authentication authentication) {
 		return duenioService.findOwn(authentication.getName());
 	}
 
 	@GetMapping("/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public DuenioResponse findById(@PathVariable Long id, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return duenioService.findOwnById(id, authentication.getName());
@@ -64,7 +59,6 @@ public class DuenioController {
 	}
 
 	@PutMapping("/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public DuenioResponse update(@PathVariable Long id, @Valid @RequestBody DuenioRequest request, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return duenioService.updateOwn(id, request, authentication.getName());
@@ -74,7 +68,6 @@ public class DuenioController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public void deactivate(@PathVariable Long id) {
 		duenioService.deactivate(id);
 	}

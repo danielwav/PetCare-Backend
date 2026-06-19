@@ -8,7 +8,6 @@ import com.petcare.backend.domain.service.VacunaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,13 +30,11 @@ public class VacunaController {
 
 	@PostMapping("/api/vacunas")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasRole('ADMIN')")
 	public VacunaResponse create(@Valid @RequestBody VacunaRequest request) {
 		return vacunaService.create(request);
 	}
 
 	@GetMapping("/api/vacunas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<VacunaResponse> findAll(
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) Boolean active
@@ -46,33 +43,28 @@ public class VacunaController {
 	}
 
 	@GetMapping("/api/vacunas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public VacunaResponse findById(@PathVariable Long id) {
 		return vacunaService.findById(id);
 	}
 
 	@PutMapping("/api/vacunas/{id}")
-	@PreAuthorize("hasRole('ADMIN')")
 	public VacunaResponse update(@PathVariable Long id, @Valid @RequestBody VacunaRequest request) {
 		return vacunaService.update(id, request);
 	}
 
 	@PatchMapping("/api/vacunas/{id}/activar")
-	@PreAuthorize("hasRole('ADMIN')")
 	public VacunaResponse activate(@PathVariable Long id) {
 		return vacunaService.activate(id);
 	}
 
 	@DeleteMapping("/api/vacunas/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("hasRole('ADMIN')")
 	public void deactivate(@PathVariable Long id) {
 		vacunaService.deactivate(id);
 	}
 
 	@PostMapping("/api/mascotas/{id}/vacunas")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public VacunaMascotaResponse registerForMascota(
 			@PathVariable Long id,
 			@Valid @RequestBody VacunaMascotaRequest request,
@@ -82,7 +74,6 @@ public class VacunaController {
 	}
 
 	@GetMapping("/api/mascotas/{id}/vacunas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<VacunaMascotaResponse> findByMascota(@PathVariable Long id, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return vacunaService.findByMascotaForDuenio(id, authentication.getName());
@@ -91,13 +82,11 @@ public class VacunaController {
 	}
 
 	@GetMapping("/api/vacunas/proximas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
 	public List<VacunaMascotaResponse> findUpcoming(@RequestParam(required = false) Integer dias) {
 		return vacunaService.findUpcoming(dias);
 	}
 
 	@GetMapping("/api/alertas/vacunas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<VacunaMascotaResponse> findAlerts(@RequestParam(required = false) Integer dias, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return vacunaService.findAlertsForDuenio(dias, authentication.getName());
