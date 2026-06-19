@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record MascotaRequest(
-		@NotNull Long duenioId,
+		Long duenioId,
 		@NotBlank @Size(max = 80) String nombre,
 		@NotBlank @Size(max = 60) String especie,
 		@NotBlank @Size(max = 80) String raza,
