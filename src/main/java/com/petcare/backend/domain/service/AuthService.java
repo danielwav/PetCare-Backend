@@ -211,7 +211,7 @@ public class AuthService {
 				.apellidos(apellidos)
 				.tipoDocumento("PENDIENTE")
 				.numeroDocumento("PENDIENTE-" + usuario.getId())
-				.telefono("000000000")
+				.telefono(usuario.getTelefono() != null ? usuario.getTelefono() : "000000000")
 				.email(usuario.getEmail())
 				.active(true)
 				.createdAt(LocalDateTime.now())
