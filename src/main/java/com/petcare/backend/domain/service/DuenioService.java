@@ -124,10 +124,12 @@ public class DuenioService {
 		duenio.setUpdatedAt(LocalDateTime.now());
 
 		Usuario usuario = duenio.getUsuario();
+		if (usuario == null) {
+			usuario = usuarioRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
+		}
 		if (usuario != null) {
 			String fullName = (request.nombres() + " " + request.apellidos()).trim();
 			usuario.setFullName(fullName);
-			usuario.setEmail(normalizeEmail(request.email()));
 			usuario.setTelefono(request.telefono().trim());
 			usuarioRepository.save(usuario);
 		}
