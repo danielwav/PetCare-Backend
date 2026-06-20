@@ -49,7 +49,17 @@ public class AuthController {
 
 	@GetMapping("/me")
 	public UserResponse me(Authentication authentication) {
-		return authService.me(authentication.getName());
+		try {
+			return authService.me(authentication.getName());
+		} catch (Exception e) {
+			if (authentication.getDetails() instanceof Map<?, ?> details) {
+				Object userId = details.get("userId");
+				if (userId instanceof Number num) {
+					return authService.meById(num.longValue());
+				}
+			}
+			throw e;
+		}
 	}
 
 	@GetMapping("/activate-account")

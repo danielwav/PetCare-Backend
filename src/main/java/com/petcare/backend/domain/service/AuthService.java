@@ -96,6 +96,12 @@ public class AuthService {
 		return toUserResponse(findByEmail(email));
 	}
 
+	public UserResponse meById(Long id) {
+		Usuario usuario = usuarioRepository.findById(id)
+				.orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
+		return toUserResponse(usuario);
+	}
+
 	@Transactional
 	public String createInternalUser(CreateInternalUserRequest request) {
 		String email = request.email().toLowerCase();
@@ -245,8 +251,8 @@ public class AuthService {
 	}
 
 	private AuthResponse buildAuthResponse(Usuario usuario) {
-		String accessToken = jwtService.generateAccessToken(usuario.getEmail());
-		String refreshToken = jwtService.generateRefreshToken(usuario.getEmail());
+		String accessToken = jwtService.generateAccessToken(usuario.getEmail(), usuario.getId());
+		String refreshToken = jwtService.generateRefreshToken(usuario.getEmail(), usuario.getId());
 		return new AuthResponse(
 				accessToken,
 				refreshToken,
