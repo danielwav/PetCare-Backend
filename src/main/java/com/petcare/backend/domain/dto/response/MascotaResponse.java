@@ -1,5 +1,6 @@
 package com.petcare.backend.domain.dto.response;
 
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import com.petcare.backend.persistence.enums.SexoMascota;
 
 import java.math.BigDecimal;
@@ -21,6 +22,9 @@ public record MascotaResponse(
 		String observaciones,
 		String fotoUrl,
 		Boolean active,
+		EstadoMascota estado,
+		LocalDateTime fechaEstado,
+		String veterinarioEstado,
 		LocalDateTime createdAt,
 		LocalDateTime updatedAt
 ) {
