@@ -43,6 +43,7 @@ public class UsuarioService {
         }
         usuario.setFullName(request.fullName());
         usuario.setEmail(email);
+        usuario.setTelefono(request.telefono());
         return toUserResponse(usuarioRepository.save(usuario));
     }
 
@@ -87,6 +88,7 @@ public class UsuarioService {
                 usuario.getId(),
                 usuario.getFullName(),
                 usuario.getEmail(),
+                usuario.getTelefono(),
                 usuario.getActive(),
                 roles
         );

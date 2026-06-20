@@ -59,6 +59,7 @@ public class AuthService {
 		Usuario usuario = Usuario.builder()
 				.fullName(request.fullName())
 				.email(email)
+				.telefono(request.telefono())
 				.password(passwordEncoder.encode(request.password()))
 				.active(true)
 				.createdAt(LocalDateTime.now())
@@ -237,6 +238,7 @@ public class AuthService {
 				usuario.getId(),
 				usuario.getFullName(),
 				usuario.getEmail(),
+				usuario.getTelefono(),
 				usuario.getActive(),
 				roles
 		);
