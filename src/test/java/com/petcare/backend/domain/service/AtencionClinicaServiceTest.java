@@ -20,10 +20,13 @@ import com.petcare.backend.domain.dto.response.VeterinarioResponse;
 import com.petcare.backend.domain.repository.CitaRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import com.petcare.backend.persistence.enums.SexoMascota;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -35,6 +38,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -57,13 +61,20 @@ class AtencionClinicaServiceTest {
 	private MascotaService mascotaService;
 
 	@Autowired
+	private CitaRepository citaRepository;
+
+	private Authentication auth;
+
+	@BeforeEach
+	void setUp() {
+		auth = mock(Authentication.class);
+	}
+
+	@Autowired
 	private VeterinarioService veterinarioService;
 
 	@Autowired
 	private ServicioService servicioService;
-
-	@Autowired
-	private CitaRepository citaRepository;
 
 	@Test
 	void registerClinicalAttentionAndAddToHistory() {
@@ -71,7 +82,7 @@ class AtencionClinicaServiceTest {
 		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
 		moveCitaToPast(cita.id());
 
-		AtencionClinicaResponse atencion = atencionClinicaService.register(cita.id(), baseAtencionRequest());
+		AtencionClinicaResponse atencion = atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth);
 		CitaResponse updatedCita = citaService.findById(cita.id());
 		HistoriaClinicaResponse historia = atencionClinicaService.findHistoriaClinicaByMascota(data.mascota().id());
 
@@ -88,13 +99,13 @@ class AtencionClinicaServiceTest {
 		TestData data = createBaseData();
 		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
 
-		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest()))
+		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth))
 				.isInstanceOf(IllegalArgumentException.class);
 
 		moveCitaToPast(cita.id());
-		atencionClinicaService.register(cita.id(), baseAtencionRequest());
+		atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth);
 
-		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest()))
+		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
@@ -203,7 +214,8 @@ class AtencionClinicaServiceTest {
 				"Dieta blanda y medicacion por 3 dias",
 				"Retornar si los sintomas continuan",
 				"Paciente estable",
-				"Seguimiento telefonico recomendado"
+				"Seguimiento telefonico recomendado",
+				EstadoMascota.PENDIENTE
 		);
 	}
 
