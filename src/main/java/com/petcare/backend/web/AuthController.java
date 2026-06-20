@@ -10,9 +10,7 @@ import com.petcare.backend.domain.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,17 +47,7 @@ public class AuthController {
 
 	@GetMapping("/me")
 	public UserResponse me(Authentication authentication) {
-		try {
-			return authService.me(authentication.getName());
-		} catch (Exception e) {
-			if (authentication.getDetails() instanceof Map<?, ?> details) {
-				Object userId = details.get("userId");
-				if (userId instanceof Number num) {
-					return authService.meById(num.longValue());
-				}
-			}
-			throw e;
-		}
+		return authService.me(authentication.getName());
 	}
 
 	@GetMapping("/activate-account")
