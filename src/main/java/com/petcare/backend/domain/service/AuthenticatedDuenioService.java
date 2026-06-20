@@ -15,7 +15,9 @@ public class AuthenticatedDuenioService {
 
 	@Transactional(readOnly = true)
 	public Duenio findByAuthenticatedEmail(String email) {
-		return duenioRepository.findByUsuarioEmail(normalizeEmail(email))
+		String normalized = normalizeEmail(email);
+		return duenioRepository.findByUsuarioEmail(normalized)
+				.or(() -> duenioRepository.findByEmail(normalized))
 				.orElseThrow(() -> new AccessDeniedException("El usuario autenticado no tiene un perfil de duenio vinculado."));
 	}
 
