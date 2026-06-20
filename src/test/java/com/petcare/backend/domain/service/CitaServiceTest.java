@@ -158,9 +158,9 @@ class CitaServiceTest {
 
 	@Test
 	void duenioCanOnlyConsultAndConfirmOwnCitas() {
-		authService.register(new RegisterRequest("Admin", "admin.cita@test.com", "secret123"));
-		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.cita@test.com", "secret123"));
-		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.cita@test.com", "secret123"));
+		authService.register(new RegisterRequest("Admin", "admin.cita@test.com", "000000000", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.cita@test.com", "000000000", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.cita@test.com", "000000000", "secret123"));
 		TestData ownerData = createBaseData("12345670", "owner.cita.profile@test.com", ownerUser.user().id(), "Lola", "CMVP-010", "vet10@test.com", "Consulta owner");
 		TestData otherData = createBaseData("12345671", "other.cita.profile@test.com", otherUser.user().id(), "Toby", "CMVP-011", "vet11@test.com", "Consulta other");
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);

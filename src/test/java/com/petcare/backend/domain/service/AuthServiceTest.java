@@ -35,6 +35,7 @@ class AuthServiceTest {
 		RegisterRequest registerRequest = new RegisterRequest(
 				"Administrador PetCare",
 				"admin@petcare.test",
+				"000000000",
 				"admin123"
 		);
 
@@ -57,6 +58,7 @@ class AuthServiceTest {
 		AuthResponse registerResponse = authService.register(new RegisterRequest(
 				"Administrador PetCare",
 				"admin.refresh@test.com",
+				"000000000",
 				"admin123"
 		));
 
@@ -72,7 +74,7 @@ class AuthServiceTest {
 
 	@Test
 	void registerDuenioUserLinksExistingDuenioByEmail() {
-		authService.register(new RegisterRequest("Administrador PetCare", "admin.link.auth@test.com", "admin123"));
+		authService.register(new RegisterRequest("Administrador PetCare", "admin.link.auth@test.com", "000000000", "admin123"));
 		DuenioResponse duenio = duenioService.create(new DuenioRequest(
 				null,
 				"Cliente",
@@ -87,6 +89,7 @@ class AuthServiceTest {
 		AuthResponse ownerUser = authService.register(new RegisterRequest(
 				"Cliente Sin Cuenta",
 				"cliente.link.auth@test.com",
+				"000000000",
 				"owner123"
 		));
 
