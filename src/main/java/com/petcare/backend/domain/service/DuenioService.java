@@ -123,6 +123,15 @@ public class DuenioService {
 		duenio.setDireccion(normalizeNullableText(request.direccion()));
 		duenio.setUpdatedAt(LocalDateTime.now());
 
+		Usuario usuario = duenio.getUsuario();
+		if (usuario != null) {
+			String fullName = (request.nombres() + " " + request.apellidos()).trim();
+			usuario.setFullName(fullName);
+			usuario.setEmail(normalizeEmail(request.email()));
+			usuario.setTelefono(request.telefono().trim());
+			usuarioRepository.save(usuario);
+		}
+
 		return toResponse(duenioRepository.save(duenio));
 	}
 
