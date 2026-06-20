@@ -7,11 +7,11 @@ import jakarta.validation.constraints.Size;
 
 public record DuenioRequest(
 		Long usuarioId,
-		@NotBlank @Size(max = 80) String nombres,
-		@NotBlank @Size(max = 80) String apellidos,
+		@Size(max = 80) String nombres,
+		@Size(max = 80) String apellidos,
 		@NotBlank @Size(max = 30) String tipoDocumento,
 		@NotBlank @Size(max = 20) String numeroDocumento,
-		@NotBlank @Pattern(regexp = "^\\d{9}$") String telefono,
+		@NotBlank @Size(min = 8, max = 20) @Pattern(regexp = "^[+\\d\\s-]+$", message = "Número de teléfono inválido") String telefono,
 		@NotBlank @Email @Size(max = 120) String email,
 		@Size(max = 180) String direccion
 ) {
