@@ -38,13 +38,9 @@ public class SecurityConfig {
 								"/v3/api-docs/**"
 						).permitAll()
 
-						/* === ADMIN only === */
 						.requestMatchers("/api/usuarios/**").hasAuthority("ROLE_ADMIN")
 
-						.requestMatchers(HttpMethod.POST,   "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
-						.requestMatchers(HttpMethod.GET,    "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
-						.requestMatchers(HttpMethod.PUT,    "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
-						.requestMatchers(HttpMethod.DELETE, "/api/asistentes/**").hasAuthority("ROLE_ADMIN")
+						.requestMatchers("/api/asistentes/**").hasAuthority("ROLE_ADMIN")
 
 						.requestMatchers(HttpMethod.POST,   "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
 						.requestMatchers(HttpMethod.GET,    "/api/veterinarios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")

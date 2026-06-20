@@ -16,7 +16,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -40,10 +39,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			try {
 				String subject = jwtService.extractSubject(token);
 				UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
-				Long userId = jwtService.extractUserId(token);
 				UsernamePasswordAuthenticationToken authentication =
 						new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-				authentication.setDetails(Map.of("userId", userId));
+				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 				SecurityContextHolder.getContext().setAuthentication(authentication);
 			} catch (UsernameNotFoundException e) {
 				// Token válido pero usuario ya no existe (ej: DB reseteada, email cambiado).
@@ -54,7 +52,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 						UserDetails userDetails = userDetailsService.loadUserById(userId);
 						UsernamePasswordAuthenticationToken authentication =
 								new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-						authentication.setDetails(Map.of("userId", userId));
+						authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 						SecurityContextHolder.getContext().setAuthentication(authentication);
 					}
 				} catch (Exception ex) {
