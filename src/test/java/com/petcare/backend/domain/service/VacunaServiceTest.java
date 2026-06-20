@@ -145,9 +145,9 @@ class VacunaServiceTest {
 
 	@Test
 	void duenioCanOnlyConsultOwnVaccineHistory() {
-		authService.register(new RegisterRequest("Admin", "admin.vacuna@test.com", "secret123"));
-		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.vacuna@test.com", "secret123"));
-		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.vacuna@test.com", "secret123"));
+		authService.register(new RegisterRequest("Admin", "admin.vacuna@test.com", "000000000", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.vacuna@test.com", "000000000", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.vacuna@test.com", "000000000", "secret123"));
 		TestData ownerData = createBaseData("12345670", "owner.vacuna.profile@test.com", ownerUser.user().id(), "Lola", "CMVP-010", "vet.vacuna10@test.com", "Consulta vacuna owner");
 		TestData otherData = createBaseData("12345671", "other.vacuna.profile@test.com", otherUser.user().id(), "Toby", "CMVP-011", "vet.vacuna11@test.com", "Consulta vacuna other");
 		VacunaResponse ownerVaccine = vacunaService.create(baseVacunaRequest("Bordetella", 365));

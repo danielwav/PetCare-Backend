@@ -137,9 +137,9 @@ class MascotaServiceTest {
 
 	@Test
 	void duenioCanOnlyConsultOwnMascotas() {
-		authService.register(new RegisterRequest("Admin", "admin.mascota@test.com", "secret123"));
-		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.mascota@test.com", "secret123"));
-		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.mascota@test.com", "secret123"));
+		authService.register(new RegisterRequest("Admin", "admin.mascota@test.com", "000000000", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.mascota@test.com", "000000000", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.mascota@test.com", "000000000", "secret123"));
 		DuenioResponse owner = createDuenio("71000005", "owner.pet@test.com", ownerUser.user().id());
 		DuenioResponse otherOwner = createDuenio("71000006", "other.pet@test.com", otherUser.user().id());
 		MascotaResponse ownPet = createMascota(owner.id(), "Lola");
