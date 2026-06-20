@@ -7,6 +7,7 @@ import com.petcare.backend.domain.service.AtencionClinicaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,9 +25,10 @@ public class AtencionClinicaController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public AtencionClinicaResponse register(
 			@PathVariable Long id,
-			@Valid @RequestBody AtencionClinicaRequest request
+			@Valid @RequestBody AtencionClinicaRequest request,
+			Authentication authentication
 	) {
-		return atencionClinicaService.register(id, request);
+		return atencionClinicaService.register(id, request, authentication);
 	}
 
 	@GetMapping("/api/mascotas/{id}/historia-clinica")

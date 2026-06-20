@@ -1,5 +1,6 @@
 package com.petcare.backend.persistence.entity;
 
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import com.petcare.backend.persistence.enums.SexoMascota;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -52,6 +53,16 @@ public class Mascota {
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private SexoMascota sexo;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 20)
+	private EstadoMascota estado;
+
+	@Column
+	private LocalDateTime fechaEstado;
+
+	@Column(length = 120)
+	private String veterinarioEstado;
 
 	@Column(nullable = false)
 	private LocalDate fechaNacimiento;

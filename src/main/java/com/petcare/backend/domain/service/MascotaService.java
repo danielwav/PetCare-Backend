@@ -9,6 +9,7 @@ import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -40,6 +41,7 @@ public class MascotaService {
 				.especie(normalizeText(request.especie()))
 				.raza(normalizeText(request.raza()))
 				.sexo(request.sexo())
+				.estado(EstadoMascota.PENDIENTE)
 				.fechaNacimiento(request.fechaNacimiento())
 				.color(normalizeNullableText(request.color()))
 				.pesoKg(request.pesoKg())
@@ -222,6 +224,9 @@ public class MascotaService {
 				mascota.getObservaciones(),
 				mascota.getFotoUrl(),
 				mascota.getActive(),
+				mascota.getEstado(),
+				mascota.getFechaEstado(),
+				mascota.getVeterinarioEstado(),
 				mascota.getCreatedAt(),
 				mascota.getUpdatedAt()
 		);

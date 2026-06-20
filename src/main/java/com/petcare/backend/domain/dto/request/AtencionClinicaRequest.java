@@ -1,6 +1,8 @@
 package com.petcare.backend.domain.dto.request;
 
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record AtencionClinicaRequest(
@@ -9,6 +11,7 @@ public record AtencionClinicaRequest(
 		@NotBlank @Size(max = 1000) String tratamiento,
 		@Size(max = 1000) String recomendaciones,
 		@Size(max = 1000) String observacionesClinicas,
-		@Size(max = 1000) String notasInternas
+		@Size(max = 1000) String notasInternas,
+		@NotNull EstadoMascota estadoMascota
 ) {
 }
