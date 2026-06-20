@@ -1,5 +1,6 @@
 package com.petcare.backend.security;
 
+import com.petcare.backend.domain.repository.UsuarioRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -24,6 +26,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private final JwtService jwtService;
 	private final CustomUserDetailsService userDetailsService;
+	private final UsuarioRepository usuarioRepository;
 
 	@Override
 	protected void doFilterInternal(
@@ -37,13 +40,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			try {
 				String subject = jwtService.extractSubject(token);
 				UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
+				Long userId = jwtService.extractUserId(token);
 				UsernamePasswordAuthenticationToken authentication =
 						new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+				authentication.setDetails(Map.of("userId", userId));
 				SecurityContextHolder.getContext().setAuthentication(authentication);
 			} catch (UsernameNotFoundException e) {
-				// Token válido pero usuario ya no existe (ej: DB reseteada).
-				// Continuar sin autenticar para que el endpoint público funcione.
+				// Token válido pero usuario ya no existe (ej: DB reseteada, email cambiado).
+				// Intentar buscar por userId del token
+				try {
+					Long userId = jwtService.extractUserId(token);
+					if (userId != null) {
+						UserDetails userDetails = userDetailsService.loadUserById(userId);
+						UsernamePasswordAuthenticationToken authentication =
+								new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+						authentication.setDetails(Map.of("userId", userId));
+						SecurityContextHolder.getContext().setAuthentication(authentication);
+					}
+				} catch (Exception ex) {
+					// No se pudo autenticar con userId
+				}
 			}
 		}
 

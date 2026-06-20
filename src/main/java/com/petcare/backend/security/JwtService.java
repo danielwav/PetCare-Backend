@@ -16,6 +16,7 @@ public class JwtService {
 	private static final String TOKEN_TYPE_CLAIM = "token_type";
 	private static final String ACCESS_TOKEN_TYPE = "access";
 	private static final String REFRESH_TOKEN_TYPE = "refresh";
+	private static final String USER_ID_CLAIM = "user_id";
 
 	private final JwtProperties properties;
 	private final SecretKey signingKey;
@@ -25,12 +26,35 @@ public class JwtService {
 		this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(properties.secret()));
 	}
 
-	public String generateToken(String subject) {
-		return generateAccessToken(subject);
+
+	public String generateAccessToken(String subject, Long userId) {
+		return generateToken(subject, userId, ACCESS_TOKEN_TYPE, properties.accessExpirationMs());
 	}
 
-	public String generateAccessToken(String subject) {
-		return generateToken(subject, ACCESS_TOKEN_TYPE, properties.accessExpirationMs());
+	public String generateRefreshToken(String subject, Long userId) {
+		return generateToken(subject, userId, REFRESH_TOKEN_TYPE, properties.refreshExpirationMs());
+	}
+
+	public String generateToken(String subject) {
+		return generateAccessToken(subject, null);
+	}
+
+	private String generateToken(String subject, Long userId, String tokenType, long expirationMs) {
+		Instant now = Instant.now();
+		var builder = Jwts.builder()
+				.subject(subject)
+				.claim(TOKEN_TYPE_CLAIM, tokenType)
+				.issuedAt(Date.from(now))
+				.expiration(Date.from(now.plusMillis(expirationMs)))
+				.signWith(signingKey);
+		if (userId != null) {
+			builder.claim(USER_ID_CLAIM, userId);
+		}
+		return builder.compact();
+	}
+
+	public Long extractUserId(String token) {
+		return extractClaims(token).get(USER_ID_CLAIM, Long.class);
 	}
 
 	public String generateRefreshToken(String subject) {
