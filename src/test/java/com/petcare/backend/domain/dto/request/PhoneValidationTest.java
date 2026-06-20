@@ -13,24 +13,32 @@ class PhoneValidationTest {
 	private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
 	@Test
-	void acceptsExactlyNineDigitsForDuenioVeterinarioAndAsistentePhones() {
-		assertThat(validator.validate(duenioRequest("999888777"))).isEmpty();
+	void acceptsValidInternationalPhones() {
+		assertThat(validator.validate(duenioRequest("+51999888777"))).isEmpty();
+		assertThat(validator.validate(duenioRequest("+57 3001234567"))).isEmpty();
+		assertThat(validator.validate(duenioRequest("+1 5551234567"))).isEmpty();
 		assertThat(validator.validate(veterinarioRequest("999777666"))).isEmpty();
-		assertThat(validator.validate(asistenteRequest("999666555"))).isEmpty();
+		assertThat(validator.validate(asistenteRequest("999-666-555"))).isEmpty();
 	}
 
 	@Test
-	void rejectsPhonesThatAreNotExactlyNineDigits() {
+	void rejectsPhonesThatAreTooShort() {
 		List<Object> invalidRequests = List.of(
-				duenioRequest("99988877"),
-				duenioRequest("9998887771"),
-				duenioRequest("+51999888"),
-				veterinarioRequest("99977766"),
-				veterinarioRequest("9997776661"),
-				veterinarioRequest("999-77766"),
-				asistenteRequest("99966655"),
-				asistenteRequest("9996665551"),
-				asistenteRequest("999 66655")
+				duenioRequest("1234567"),
+				veterinarioRequest("1234567"),
+				asistenteRequest("1234567")
+		);
+
+		assertThat(invalidRequests)
+				.allSatisfy(request -> assertThat(validator.validate(request)).isNotEmpty());
+	}
+
+	@Test
+	void rejectsPhonesWithInvalidCharacters() {
+		List<Object> invalidRequests = List.of(
+				duenioRequest("abc12345"),
+				veterinarioRequest("999 777 66a"),
+				asistenteRequest("555-666-7f7")
 		);
 
 		assertThat(invalidRequests)
