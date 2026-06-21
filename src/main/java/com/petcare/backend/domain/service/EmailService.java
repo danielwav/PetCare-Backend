@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,6 +23,7 @@ public class EmailService {
     @Value("${FRONTEND_URL:}")
     private String frontendUrl;
 
+    @Async
     public void sendActivationEmail(String to, String fullName, String token) {
         if (frontendUrl == null || frontendUrl.isBlank()) {
             log.error("No se puede enviar el correo: FRONTEND_URL no configurada");
