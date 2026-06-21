@@ -44,6 +44,11 @@ public class UsuarioController {
         return usuarioService.update(id, request);
     }
 
+    @DeleteMapping("/{id}")
+    public UserResponse deactivate(@PathVariable Long id) {
+        return usuarioService.toggleActive(id);
+    }
+
     @PatchMapping("/{id}/activate")
     public UserResponse toggleActive(@PathVariable Long id) {
         return usuarioService.toggleActive(id);
