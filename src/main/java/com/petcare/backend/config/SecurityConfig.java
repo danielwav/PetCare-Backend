@@ -38,44 +38,7 @@ public class SecurityConfig {
 								"/v3/api-docs/**"
 						).permitAll()
 
-						.requestMatchers("/api/usuarios/**").hasAuthority("ROLE_ADMIN")
-
-						.requestMatchers("/api/asistentes/**").hasAuthority("ROLE_ADMIN")
-
-						.requestMatchers(HttpMethod.POST,   "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
-						.requestMatchers(HttpMethod.GET,    "/api/veterinarios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-						.requestMatchers(HttpMethod.PUT,    "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
-						.requestMatchers(HttpMethod.DELETE, "/api/veterinarios/**").hasAuthority("ROLE_ADMIN")
-
-						.requestMatchers(HttpMethod.GET,    "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
-						.requestMatchers(HttpMethod.POST,   "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE")
-						.requestMatchers(HttpMethod.PUT,    "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_DUENIO")
-						.requestMatchers(HttpMethod.DELETE, "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE")
-
-						.requestMatchers(HttpMethod.POST,   "/api/mascotas/**").permitAll()
-						.requestMatchers(HttpMethod.GET,    "/api/mascotas/**").permitAll()
-						.requestMatchers(HttpMethod.PUT,    "/api/mascotas/**").permitAll()
-						.requestMatchers(HttpMethod.DELETE, "/api/mascotas/**").permitAll()
-						.requestMatchers("/api/citas/**").permitAll()
-						.requestMatchers("/api/alertas/**").permitAll()
-
-						.requestMatchers("/api/vacunas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
-
-						.requestMatchers("/api/servicios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-
-						.requestMatchers("/api/atencion-clinica/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
-
-						.requestMatchers("/api/controles-mensuales/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-
-						.requestMatchers("/api/inasistencias/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-
-						.requestMatchers("/api/reportes/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-
-						.requestMatchers("/api/horarios-semanales/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-
-						.requestMatchers("/api/notas-seguimiento/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
-
-						.anyRequest().authenticated())
+						.anyRequest().permitAll())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
 	}
