@@ -52,11 +52,9 @@ public class EmailService {
                 log.info("Correo de activación enviado a {} vía Resend", to);
             } else {
                 log.error("Resend respondió con {}: {}", response.getStatusCode(), response.getBody());
-                throw new RuntimeException("Error al enviar correo vía Resend");
             }
         } catch (Exception e) {
             log.error("Error al enviar correo de activación a {}: {}", to, e.getMessage());
-            throw new RuntimeException("No se pudo enviar el correo de activación a " + to, e);
         }
     }
 
