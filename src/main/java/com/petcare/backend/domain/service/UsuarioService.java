@@ -8,6 +8,8 @@ import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,9 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public List<UserResponse> findAll() {
         return usuarioRepository.findAll().stream()
@@ -48,10 +53,17 @@ public class UsuarioService {
     }
 
     @Transactional
-    public UserResponse deactivate(Long id) {
+    public void hardDelete(Long id) {
         Usuario usuario = findUsuario(id);
-        usuario.setActive(false);
-        return toUserResponse(usuarioRepository.save(usuario));
+        entityManager.createNativeQuery("UPDATE duenios SET usuario_id = NULL WHERE usuario_id = :id")
+                .setParameter("id", id).executeUpdate();
+        entityManager.createNativeQuery("UPDATE veterinarios SET usuario_id = NULL WHERE usuario_id = :id")
+                .setParameter("id", id).executeUpdate();
+        entityManager.createNativeQuery("UPDATE asistentes SET usuario_id = NULL WHERE usuario_id = :id")
+                .setParameter("id", id).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM horarios_semanales WHERE usuario_id = :id")
+                .setParameter("id", id).executeUpdate();
+        usuarioRepository.delete(usuario);
     }
 
     @Transactional

@@ -45,8 +45,9 @@ public class UsuarioController {
     }
 
     @DeleteMapping("/{id}")
-    public UserResponse delete(@PathVariable Long id) {
-        return usuarioService.deactivate(id);
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        usuarioService.hardDelete(id);
     }
 
     @PatchMapping("/{id}/activate")
