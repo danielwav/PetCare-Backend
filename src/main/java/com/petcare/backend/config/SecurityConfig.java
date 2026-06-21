@@ -52,14 +52,12 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT,    "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_DUENIO")
 						.requestMatchers(HttpMethod.DELETE, "/api/duenios/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE")
 
-						.requestMatchers(HttpMethod.POST,   "/api/mascotas/**").authenticated()
-						.requestMatchers(HttpMethod.GET,    "/api/mascotas/**").authenticated()
-						.requestMatchers(HttpMethod.PUT,    "/api/mascotas/**").authenticated()
-						.requestMatchers(HttpMethod.DELETE, "/api/mascotas/**").authenticated()
-
-						.requestMatchers("/api/citas/**").authenticated()
-
-						.requestMatchers("/api/alertas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO")
+						.requestMatchers(HttpMethod.POST,   "/api/mascotas/**").permitAll()
+						.requestMatchers(HttpMethod.GET,    "/api/mascotas/**").permitAll()
+						.requestMatchers(HttpMethod.PUT,    "/api/mascotas/**").permitAll()
+						.requestMatchers(HttpMethod.DELETE, "/api/mascotas/**").permitAll()
+						.requestMatchers("/api/citas/**").permitAll()
+						.requestMatchers("/api/alertas/**").permitAll()
 
 						.requestMatchers("/api/vacunas/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ASISTENTE", "ROLE_VETERINARIO", "ROLE_DUENIO")
 
