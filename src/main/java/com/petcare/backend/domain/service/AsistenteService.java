@@ -60,6 +60,7 @@ public class AsistenteService {
 	public List<AsistenteResponse> findAll(String search, Boolean active) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 		return asistenteRepository.search(normalizedSearch, active).stream()
+				.filter(a -> a.getUsuario() != null)
 				.map(this::toResponse)
 				.toList();
 	}
