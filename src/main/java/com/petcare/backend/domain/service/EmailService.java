@@ -17,9 +17,6 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${app.mail.from}")
-    private String mailFrom;
-
     @Value("${FRONTEND_URL:}")
     private String frontendUrl;
 
@@ -35,7 +32,7 @@ public class EmailService {
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(mailFrom);
+            message.setFrom("tcovenas456@gmail.com");
             message.setTo(to);
             message.setSubject("PetCare - Activa tu cuenta");
             message.setText(text);
