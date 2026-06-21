@@ -41,19 +41,7 @@ public class NotificacionController {
         boolean isDuenio = hasRole(authentication, "ROLE_DUENIO");
 
         try {
-            // Próximas citas (VET, ASISTENTE, DUENIO)
-            if (isVet || isAsistente || isDuenio) {
-                var citasHoy = citaService.findAll(EstadoCita.PROGRAMADA, today, null, null, null);
-                for (var c : citasHoy) {
-                    notificaciones.add(new NotificacionResponse(
-                        idGen.getAndIncrement(), "CITA_PROXIMA",
-                        c.mascotaNombre() + " — " + c.motivo() + " (" + c.horaInicio() + ")",
-                        hoy, "/citas", "calendar_month", false
-                    ));
-                }
-            }
-
-            // Citas sin confirmar (ADMIN, ASISTENTE)
+            // Citas sin confirmar (ADMIN, ASISTENTE — módulo Alertas/Citas)
             if (isAdmin || isAsistente) {
                 var citasSinConfirmar = citaService.findAll(EstadoCita.PROGRAMADA, null, null, null, null).stream()
                     .filter(c -> Boolean.TRUE.equals(c.requiereConfirmacion()) && !c.fecha().isBefore(today))
@@ -67,7 +55,19 @@ public class NotificacionController {
                 }
             }
 
-            // Citas ATENDIDAS hoy — pendientes de atención clínica (VET, ASISTENTE)
+            // Próximas citas (VET, ASISTENTE, DUENIO)
+            if (isVet || isAsistente || isDuenio) {
+                var citasHoy = citaService.findAll(EstadoCita.PROGRAMADA, today, null, null, null);
+                for (var c : citasHoy) {
+                    notificaciones.add(new NotificacionResponse(
+                        idGen.getAndIncrement(), "CITA_PROXIMA",
+                        c.mascotaNombre() + " — " + c.motivo() + " (" + c.horaInicio() + ")",
+                        hoy, "/citas", "calendar_month", false
+                    ));
+                }
+            }
+
+            // Atención pendiente (VET, ASISTENTE — módulo Atención Clínica)
             if (isVet || isAsistente) {
                 var citasConfirmadas = citaService.findAll(EstadoCita.CONFIRMADA, today, null, null, null);
                 for (var c : citasConfirmadas) {
@@ -79,7 +79,7 @@ public class NotificacionController {
                 }
             }
 
-            // Citas próximas (mañana) para DUENIO
+            // Recordatorio (solo DUENIO)
             if (isDuenio) {
                 var citasManana = citaService.findAll(null, today.plusDays(1), null, null, null);
                 for (var c : citasManana) {
@@ -92,19 +92,20 @@ public class NotificacionController {
             }
         } catch (Exception ignored) {}
 
-        // Vacunas próximas (todos los roles)
-        try {
-            var vacunas = vacunaService.findAlerts(30);
-            for (var v : vacunas) {
-                notificaciones.add(new NotificacionResponse(
-                    idGen.getAndIncrement(), "VACUNA",
-                    v.vacunaNombre() + " — " + v.mascotaNombre(),
-                    v.fechaProximaDosis() != null ? v.fechaProximaDosis().toString() : "",
-                    "/vacunas", "vaccines", false
-                ));
-            }
-        } catch (Exception ignored) {}
-
+        // Vacunas próximas (VET, ASISTENTE, DUENIO — módulo Vacunas)
+        if (isVet || isAsistente || isDuenio) {
+            try {
+                var vacunas = vacunaService.findAlerts(30);
+                for (var v : vacunas) {
+                    notificaciones.add(new NotificacionResponse(
+                        idGen.getAndIncrement(), "VACUNA",
+                        v.vacunaNombre() + " — " + v.mascotaNombre(),
+                        v.fechaProximaDosis() != null ? v.fechaProximaDosis().toString() : "",
+                        "/vacunas", "vaccines", false
+                    ));
+                }
+            } catch (Exception ignored) {}
+        }
         notificaciones.sort(Comparator.comparing(NotificacionResponse::fecha).reversed());
         return notificaciones.size() > 20 ? notificaciones.subList(0, 20) : notificaciones;
     }
