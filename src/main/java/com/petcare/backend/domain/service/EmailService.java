@@ -17,35 +17,59 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    @Value("${MAIL_FROM:}")
+    private String mailFrom;
+
     @Value("${FRONTEND_URL:}")
     private String frontendUrl;
 
     @Async
     public void sendActivationEmail(String to, String fullName, String token) {
+        if (mailFrom == null || mailFrom.isBlank()) {
+            log.error("No se puede enviar el correo: MAIL_FROM no configurado");
+            return;
+        }
         if (frontendUrl == null || frontendUrl.isBlank()) {
             log.error("No se puede enviar el correo: FRONTEND_URL no configurada");
             return;
         }
-
         String link = frontendUrl.replaceAll("/+$", "") + "/activate-account?token=" + token;
-        String text = buildText(fullName, link);
+        String text = buildActivationText(fullName, link);
+        log.info("Enviando correo de activación a {} desde {}", to, mailFrom);
+        send(to, "PetCare - Activa tu cuenta", text);
+    }
 
-        log.info("=== ENLACE DE ACTIVACIÓN para {}: {}", to, link);
+    @Async
+    public void sendPasswordRecoveryEmail(String to, String fullName, String token) {
+        if (mailFrom == null || mailFrom.isBlank()) {
+            log.error("No se puede enviar el correo: MAIL_FROM no configurado");
+            return;
+        }
+        if (frontendUrl == null || frontendUrl.isBlank()) {
+            log.error("No se puede enviar el correo: FRONTEND_URL no configurada");
+            return;
+        }
+        String link = frontendUrl.replaceAll("/+$", "") + "/reset-password?token=" + token;
+        String text = buildRecoveryText(fullName, link);
+        log.info("Enviando correo de recuperación a {} desde {}", to, mailFrom);
+        send(to, "PetCare - Recuperación de contraseña", text);
+    }
 
+    private void send(String to, String subject, String text) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("tcovenas456@gmail.com");
+            message.setFrom(mailFrom);
             message.setTo(to);
-            message.setSubject("PetCare - Activa tu cuenta");
+            message.setSubject(subject);
             message.setText(text);
             mailSender.send(message);
-            log.info("Correo de activación enviado a {}", to);
+            log.info("Correo enviado a {} — asunto: {}", to, subject);
         } catch (Exception e) {
-            log.error("Error SMTP al enviar a {}: {}", to, e.getMessage());
+            log.error("Error SMTP al enviar a {}: {} — {}", to, e.getClass().getSimpleName(), e.getMessage());
         }
     }
 
-    private String buildText(String fullName, String link) {
+    private String buildActivationText(String fullName, String link) {
         return """
 Hola %s,
 
@@ -58,6 +82,24 @@ Para activarla y crear tu contraseña, haz clic en el siguiente enlace:
 Este enlace expirará en 7 días.
 
 Si no esperabas este correo, ignóralo.
+
+© 2026 PetCare - Sistema de Gestión Veterinaria
+""".formatted(fullName, link);
+    }
+
+    private String buildRecoveryText(String fullName, String link) {
+        return """
+Hola %s,
+
+Recibimos una solicitud para restablecer tu contraseña en PetCare.
+
+Haz clic en el siguiente enlace para crear una nueva contraseña:
+
+%s
+
+Este enlace expirará en 1 hora.
+
+Si no solicitaste este cambio, ignora este correo.
 
 © 2026 PetCare - Sistema de Gestión Veterinaria
 """.formatted(fullName, link);
