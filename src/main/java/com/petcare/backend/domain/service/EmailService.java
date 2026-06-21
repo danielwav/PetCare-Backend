@@ -30,6 +30,8 @@ public class EmailService {
         String link = frontendUrl.replaceAll("/+$", "") + "/activate-account?token=" + token;
         String text = buildText(fullName, link);
 
+        log.info("=== ENLACE DE ACTIVACIÓN para {}: {}", to, link);
+
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom("tcovenas456@gmail.com");
@@ -39,7 +41,7 @@ public class EmailService {
             mailSender.send(message);
             log.info("Correo de activación enviado a {}", to);
         } catch (Exception e) {
-            log.error("Error al enviar correo de activación a {}: {}", to, e.getMessage());
+            log.error("Error SMTP al enviar a {}: {}", to, e.getMessage());
         }
     }
 
