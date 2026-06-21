@@ -45,8 +45,8 @@ public class UsuarioController {
     }
 
     @DeleteMapping("/{id}")
-    public UserResponse deactivate(@PathVariable Long id) {
-        return usuarioService.toggleActive(id);
+    public UserResponse delete(@PathVariable Long id) {
+        return usuarioService.deactivate(id);
     }
 
     @PatchMapping("/{id}/activate")

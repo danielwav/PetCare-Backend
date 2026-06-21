@@ -48,6 +48,13 @@ public class UsuarioService {
     }
 
     @Transactional
+    public UserResponse deactivate(Long id) {
+        Usuario usuario = findUsuario(id);
+        usuario.setActive(false);
+        return toUserResponse(usuarioRepository.save(usuario));
+    }
+
+    @Transactional
     public UserResponse toggleActive(Long id) {
         Usuario usuario = findUsuario(id);
         usuario.setActive(!usuario.getActive());
