@@ -67,8 +67,8 @@ public class NotificacionController {
                 }
             }
 
-            // Atención pendiente (VET, ASISTENTE — módulo Atención Clínica)
-            if (isVet || isAsistente) {
+            // Atención pendiente (solo VET — módulo Atención Clínica)
+            if (isVet) {
                 var citasConfirmadas = citaService.findAll(EstadoCita.CONFIRMADA, today, null, null, null);
                 for (var c : citasConfirmadas) {
                     notificaciones.add(new NotificacionResponse(
@@ -92,8 +92,8 @@ public class NotificacionController {
             }
         } catch (Exception ignored) {}
 
-        // Vacunas próximas (VET, ASISTENTE, DUENIO — módulo Vacunas)
-        if (isVet || isAsistente || isDuenio) {
+        // Vacunas próximas (VET, DUENIO — módulo Vacunas)
+        if (isVet || isDuenio) {
             try {
                 var vacunas = vacunaService.findAlerts(30);
                 for (var v : vacunas) {
