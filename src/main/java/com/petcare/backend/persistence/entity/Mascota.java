@@ -55,7 +55,7 @@ public class Mascota {
 	private SexoMascota sexo;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 20)
+	@Column(length = 20)
 	private EstadoMascota estado;
 
 	@Column
