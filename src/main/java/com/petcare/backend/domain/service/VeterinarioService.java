@@ -43,11 +43,11 @@ public class VeterinarioService {
 		LocalDateTime now = LocalDateTime.now();
 		Veterinario veterinario = Veterinario.builder()
 				.usuario(usuario)
-				.nombres(normalizeText(request.nombres()))
-				.apellidos(normalizeText(request.apellidos()))
+				.nombres(normalizeNullableText(request.nombres()))
+				.apellidos(normalizeNullableText(request.apellidos()))
 				.numeroColegiatura(normalizeText(request.numeroColegiatura()))
 				.especialidad(normalizeText(request.especialidad()))
-				.telefono(request.telefono().trim())
+				.telefono(normalizeNullableText(request.telefono()))
 				.email(normalizeEmail(request.email()))
 				.active(true)
 				.createdAt(now)
@@ -83,11 +83,11 @@ public class VeterinarioService {
 		validateHorarios(request.horarios());
 
 		veterinario.setUsuario(usuario);
-		veterinario.setNombres(normalizeText(request.nombres()));
-		veterinario.setApellidos(normalizeText(request.apellidos()));
+		veterinario.setNombres(normalizeNullableText(request.nombres()));
+		veterinario.setApellidos(normalizeNullableText(request.apellidos()));
 		veterinario.setNumeroColegiatura(normalizeText(request.numeroColegiatura()));
 		veterinario.setEspecialidad(normalizeText(request.especialidad()));
-		veterinario.setTelefono(request.telefono().trim());
+		veterinario.setTelefono(normalizeNullableText(request.telefono()));
 		veterinario.setEmail(normalizeEmail(request.email()));
 		veterinario.setUpdatedAt(LocalDateTime.now());
 		replaceHorarios(veterinario, request.horarios());
@@ -172,6 +172,7 @@ public class VeterinarioService {
 	}
 
 	private void validateUniqueEmail(String email, Long currentId) {
+		if (email == null || email.isBlank()) return;
 		String normalizedEmail = normalizeEmail(email);
 		veterinarioRepository.findByEmail(normalizedEmail)
 				.filter(veterinario -> currentId == null || !veterinario.getId().equals(currentId))
@@ -258,10 +259,14 @@ public class VeterinarioService {
 	}
 
 	private String normalizeEmail(String value) {
-		return value.trim().toLowerCase();
+		return value == null ? null : value.trim().toLowerCase();
 	}
 
 	private String normalizeText(String value) {
 		return value.trim();
+	}
+
+	private String normalizeNullableText(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
 	}
 }
