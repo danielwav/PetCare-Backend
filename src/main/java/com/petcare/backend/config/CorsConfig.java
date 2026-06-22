@@ -16,7 +16,10 @@ public class CorsConfig {
         var config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:*",
+                "http://localhost",
                 "http://127.0.0.1:*",
+                "http://127.0.0.1",
+                "capacitor://*",
                 "https://*.onrender.com",
                 "https://*.vercel.app",
                 "https://*.netlify.app",
