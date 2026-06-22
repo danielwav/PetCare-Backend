@@ -54,6 +54,11 @@ public class VeterinarioService {
 				.updatedAt(now)
 				.build();
 
+		if (veterinario.getNombres() == null) veterinario.setNombres("");
+		if (veterinario.getApellidos() == null) veterinario.setApellidos("");
+		if (veterinario.getTelefono() == null) veterinario.setTelefono("");
+		if (veterinario.getEmail() == null) veterinario.setEmail("");
+
 		replaceHorarios(veterinario, request.horarios());
 		return toResponse(veterinarioRepository.save(veterinario));
 	}
@@ -62,6 +67,7 @@ public class VeterinarioService {
 	public List<VeterinarioResponse> findAll(String search, Boolean active) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 		return veterinarioRepository.search(normalizedSearch, active).stream()
+				.filter(v -> v.getUsuario() != null)
 				.map(this::toResponse)
 				.toList();
 	}
@@ -89,6 +95,12 @@ public class VeterinarioService {
 		veterinario.setEspecialidad(normalizeText(request.especialidad()));
 		veterinario.setTelefono(normalizeNullableText(request.telefono()));
 		veterinario.setEmail(normalizeEmail(request.email()));
+		veterinario.setUpdatedAt(LocalDateTime.now());
+
+		if (veterinario.getNombres() == null) veterinario.setNombres("");
+		if (veterinario.getApellidos() == null) veterinario.setApellidos("");
+		if (veterinario.getTelefono() == null) veterinario.setTelefono("");
+		if (veterinario.getEmail() == null) veterinario.setEmail("");
 		veterinario.setUpdatedAt(LocalDateTime.now());
 		replaceHorarios(veterinario, request.horarios());
 
