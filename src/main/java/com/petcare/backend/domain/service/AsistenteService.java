@@ -126,7 +126,7 @@ public class AsistenteService {
 			throw new IllegalArgumentException("El correo ya esta registrado para un usuario.");
 		}
 		return Usuario.builder()
-				.fullName(fullName(request.nombres(), request.apellidos()))
+				.fullName(coalesce(request.nombres(), email.split("@")[0]))
 				.email(email)
 				.password(passwordEncoder.encode(request.password()))
 				.active(true)
@@ -143,8 +143,12 @@ public class AsistenteService {
 		if (usuario == null) {
 			return resolveUsuarioForCreate(request);
 		}
-		usuario.setFullName(fullName(request.nombres(), request.apellidos()));
-		usuario.setEmail(normalizeEmail(request.email()));
+		if (request.nombres() != null && !request.nombres().isBlank()) {
+			usuario.setFullName(fullName(request.nombres(), request.apellidos()));
+		}
+		if (request.email() != null && !request.email().isBlank()) {
+			usuario.setEmail(normalizeEmail(request.email()));
+		}
 		if (request.password() != null && !request.password().isBlank()) {
 			usuario.setPassword(passwordEncoder.encode(request.password()));
 		}
