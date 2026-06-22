@@ -2,6 +2,7 @@ package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.response.CitaResponse;
 import com.petcare.backend.domain.dto.response.NotificacionResponse;
+import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.service.CitaService;
 import com.petcare.backend.domain.service.VacunaService;
 import com.petcare.backend.persistence.enums.EstadoCita;
@@ -41,6 +42,36 @@ public class NotificacionController {
         boolean isDuenio = hasRole(authentication, "ROLE_DUENIO");
 
         try {
+            // Próximas citas (VET, ASISTENTE, DUENIO)
+            if (isVet || isAsistente || isDuenio) {
+                List<CitaResponse> citasHoy;
+                List<CitaResponse> citasManana = List.of();
+                if (isDuenio) {
+                    String email = authentication.getName();
+                    citasHoy = citaService.findAllForDuenio(email, EstadoCita.PROGRAMADA, today, null, null);
+                    citasManana = citaService.findAllForDuenio(email, null, today.plusDays(1), null, null);
+                } else {
+                    citasHoy = citaService.findAll(EstadoCita.PROGRAMADA, today, null, null, null);
+                }
+                for (var c : citasHoy) {
+                    notificaciones.add(new NotificacionResponse(
+                        idGen.getAndIncrement(), "CITA_PROXIMA",
+                        c.mascotaNombre() + " — " + c.motivo() + " (" + c.horaInicio() + ")",
+                        hoy, "/citas", "calendar_month", false
+                    ));
+                }
+                // Recordatorio (solo DUENIO)
+                if (isDuenio) {
+                    for (var c : citasManana) {
+                        notificaciones.add(new NotificacionResponse(
+                            idGen.getAndIncrement(), "RECORDATORIO",
+                            "Recordatorio: " + c.mascotaNombre() + " — " + c.motivo() + " mañana a las " + c.horaInicio(),
+                            manana, "/citas", "alarm", false
+                        ));
+                    }
+                }
+            }
+
             // Citas sin confirmar (ADMIN, ASISTENTE — módulo Alertas/Citas)
             if (isAdmin || isAsistente) {
                 var citasSinConfirmar = citaService.findAll(EstadoCita.PROGRAMADA, null, null, null, null).stream()
@@ -51,18 +82,6 @@ public class NotificacionController {
                         idGen.getAndIncrement(), "CITA_CONFIRMAR",
                         c.duenioNombreCompleto() + " — " + c.mascotaNombre() + " (" + c.fecha() + ")",
                         c.fecha().toString(), "/citas/" + c.id(), "notification_important", false
-                    ));
-                }
-            }
-
-            // Próximas citas (VET, ASISTENTE, DUENIO)
-            if (isVet || isAsistente || isDuenio) {
-                var citasHoy = citaService.findAll(EstadoCita.PROGRAMADA, today, null, null, null);
-                for (var c : citasHoy) {
-                    notificaciones.add(new NotificacionResponse(
-                        idGen.getAndIncrement(), "CITA_PROXIMA",
-                        c.mascotaNombre() + " — " + c.motivo() + " (" + c.horaInicio() + ")",
-                        hoy, "/citas", "calendar_month", false
                     ));
                 }
             }
@@ -78,24 +97,17 @@ public class NotificacionController {
                     ));
                 }
             }
-
-            // Recordatorio (solo DUENIO)
-            if (isDuenio) {
-                var citasManana = citaService.findAll(null, today.plusDays(1), null, null, null);
-                for (var c : citasManana) {
-                    notificaciones.add(new NotificacionResponse(
-                        idGen.getAndIncrement(), "RECORDATORIO",
-                        "Recordatorio: " + c.mascotaNombre() + " — " + c.motivo() + " mañana a las " + c.horaInicio(),
-                        manana, "/citas", "alarm", false
-                    ));
-                }
-            }
         } catch (Exception ignored) {}
 
         // Vacunas próximas (VET, DUENIO — módulo Vacunas)
         if (isVet || isDuenio) {
             try {
-                var vacunas = vacunaService.findAlerts(30);
+                List<VacunaMascotaResponse> vacunas;
+                if (isDuenio) {
+                    vacunas = vacunaService.findAlertsForDuenio(30, authentication.getName());
+                } else {
+                    vacunas = vacunaService.findAlerts(30);
+                }
                 for (var v : vacunas) {
                     notificaciones.add(new NotificacionResponse(
                         idGen.getAndIncrement(), "VACUNA",
