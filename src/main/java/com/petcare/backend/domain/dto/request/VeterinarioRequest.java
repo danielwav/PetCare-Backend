@@ -14,8 +14,8 @@ public record VeterinarioRequest(
 		@Size(max = 80) String apellidos,
 		@NotBlank @Size(max = 30) String numeroColegiatura,
 		@NotBlank @Size(max = 100) String especialidad,
-		@Size(min = 8, max = 20) String telefono,
-		@Email @Size(max = 120) String email,
+		@Size(max = 20) String telefono,
+		@Size(max = 120) String email,
 		List<@Valid HorarioVeterinarioRequest> horarios
 ) {
 }
