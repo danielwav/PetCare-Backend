@@ -38,10 +38,10 @@ public class Veterinario {
 	@JoinColumn(name = "usuario_id", unique = true)
 	private Usuario usuario;
 
-	@Column(nullable = false, length = 80)
+	@Column(length = 80)
 	private String nombres;
 
-	@Column(nullable = false, length = 80)
+	@Column(length = 80)
 	private String apellidos;
 
 	@Column(nullable = false, unique = true, length = 30)
@@ -50,10 +50,10 @@ public class Veterinario {
 	@Column(nullable = false, length = 100)
 	private String especialidad;
 
-	@Column(nullable = false, length = 9)
+	@Column(length = 20)
 	private String telefono;
 
-	@Column(nullable = false, unique = true, length = 120)
+	@Column(unique = true, length = 120)
 	private String email;
 
 	@Column(nullable = false)
