@@ -16,6 +16,7 @@ public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
     private final JavaMailSender mailSender;
+    private final MailgunEmailSender mailgunSender;
 
     @Value("${MAIL_FROM:}")
     private String mailFrom;
@@ -56,15 +57,20 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String text) {
+        if (mailgunSender.isAvailable()) {
+            log.info("Usando Mailgun HTTP API para enviar a {}", to);
+            mailgunSender.send(to, subject, text);
+            return;
+        }
+        log.info("Mailgun no disponible, usando SMTP (host: {}, port: {})", to,
+                System.getenv().getOrDefault("MAIL_HOST", "smtp.gmail.com"),
+                System.getenv().getOrDefault("MAIL_PORT", "587"));
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(mailFrom);
             message.setTo(to);
             message.setSubject(subject);
             message.setText(text);
-            log.info("Intentando enviar correo a {} (host: {}, port: {})", to,
-                    System.getenv().getOrDefault("MAIL_HOST", "smtp.gmail.com"),
-                    System.getenv().getOrDefault("MAIL_PORT", "587"));
             mailSender.send(message);
             log.info("Correo enviado exitosamente a {} — asunto: {}", to, subject);
         } catch (Exception e) {

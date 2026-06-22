@@ -1,8 +1,7 @@
 package com.petcare.backend.web;
 
-import jakarta.mail.NoSuchProviderException;
-import jakarta.mail.Session;
-import jakarta.mail.Transport;
+import com.petcare.backend.domain.service.MailgunEmailSender;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,76 +12,99 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Base64;
 import java.util.Map;
-import java.util.Properties;
 
 @RestController
 @RequestMapping("/api/email")
+@RequiredArgsConstructor
 public class EmailTestController {
 
     private static final Logger log = LoggerFactory.getLogger(EmailTestController.class);
+    private static final int TIMEOUT_SECONDS = 10;
 
-    @Value("${spring.mail.host}")
-    private String mailHost;
+    private final MailgunEmailSender mailgunSender;
 
-    @Value("${spring.mail.port}")
-    private int mailPort;
+    @Value("${MAILGUN_API_KEY:}")
+    private String mailgunApiKey;
+
+    @Value("${MAILGUN_DOMAIN:}")
+    private String mailgunDomain;
+
+    @Value("${MAIL_FROM:}")
+    private String mailFrom;
 
     @GetMapping("/test")
     public ResponseEntity<Map<String, Object>> test() {
         log.info("--- Email Connectivity Test ---");
-        log.info("Host: {}, Port: {}", mailHost, mailPort);
 
-        // 1. DNS resolution
+        boolean mailgunConfigured = mailgunSender.isAvailable();
+        String mailgunDomainVal = mailgunDomain;
+
+        // Test DNS resolution for api.mailgun.net
         boolean dnsOk = false;
         String resolvedIp = "unknown";
         try {
-            resolvedIp = java.net.InetAddress.getByName(mailHost).getHostAddress();
+            resolvedIp = java.net.InetAddress.getByName("api.mailgun.net").getHostAddress();
             dnsOk = true;
-            log.info("DNS OK: {} -> {}", mailHost, resolvedIp);
+            log.info("DNS OK: api.mailgun.net -> {}", resolvedIp);
         } catch (Exception e) {
             log.error("DNS FAILED: {}", e.getMessage());
         }
 
-        // 2. TCP socket connection
+        // Test TCP socket to api.mailgun.net:443
         boolean tcpOk = false;
         String tcpError = null;
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(mailHost, mailPort), 15000);
+            socket.connect(new InetSocketAddress("api.mailgun.net", 443), TIMEOUT_SECONDS * 1000);
             tcpOk = true;
-            log.info("TCP OK: conectado a {}:{}", mailHost, mailPort);
+            log.info("TCP OK: conectado a api.mailgun.net:443");
         } catch (Exception e) {
             tcpError = e.getClass().getSimpleName() + ": " + e.getMessage();
             log.error("TCP FAILED: {}", tcpError);
         }
 
-        // 3. JavaMail Transport check
-        boolean transportOk = false;
-        String transportError = null;
-        try {
-            Properties props = new Properties();
-            props.put("mail.smtp.host", mailHost);
-            props.put("mail.smtp.port", String.valueOf(mailPort));
-            Session session = Session.getInstance(props);
-            Transport transport = session.getTransport("smtp");
-            transport.connect();
-            transport.close();
-            transportOk = true;
-            log.info("TRANSPORT OK: conexión SMTP establecida");
-        } catch (NoSuchProviderException e) {
-            transportError = "NoSuchProvider: " + e.getMessage();
-            log.error("TRANSPORT FAILED: {}", transportError);
-        } catch (Exception e) {
-            transportError = e.getClass().getSimpleName() + ": " + e.getMessage();
-            log.error("TRANSPORT FAILED: {}", transportError);
+        // Test HTTP GET to Mailgun API
+        boolean httpOk = false;
+        String httpError = null;
+        int httpStatus = 0;
+        if (mailgunConfigured) {
+            try {
+                String auth = Base64.getEncoder().encodeToString(("api:" + mailgunApiKey).getBytes());
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create("https://api.mailgun.net/v3/" + mailgunDomain + "/messages"))
+                        .header("Authorization", "Basic " + auth)
+                        .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                        .GET()
+                        .build();
+                HttpResponse<String> response = HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                        .build()
+                        .send(request, HttpResponse.BodyHandlers.ofString());
+                httpStatus = response.statusCode();
+                httpOk = true;
+                log.info("HTTP OK: status {}", httpStatus);
+            } catch (Exception e) {
+                httpError = e.getClass().getSimpleName() + ": " + e.getMessage();
+                log.error("HTTP FAILED: {}", httpError);
+            }
+        } else {
+            httpError = "Mailgun no configurado (faltan MAILGUN_API_KEY, MAILGUN_DOMAIN y/o MAIL_FROM)";
+            log.warn(httpError);
         }
 
         Map<String, Object> result = Map.of(
-                "host", mailHost,
-                "port", mailPort,
-                "dnsResolution", Map.of("ok", dnsOk, "ip", resolvedIp),
-                "tcpConnection", Map.of("ok", tcpOk, "error", tcpError),
-                "smtpTransport", Map.of("ok", transportOk, "error", transportError)
+                "mailgunConfigured", mailgunConfigured,
+                "mailgunDomain", mailgunDomainVal != null ? mailgunDomainVal : "no configurado",
+                "mailFrom", mailFrom != null ? mailFrom : "no configurado",
+                "dnsResolution", Map.of("host", "api.mailgun.net", "ok", dnsOk, "ip", resolvedIp),
+                "tcpConnection", Map.of("host", "api.mailgun.net:443", "ok", tcpOk, "error", tcpError),
+                "httpApi", Map.of("ok", httpOk, "status", httpStatus, "error", httpError)
         );
 
         log.info("--- Resultado: {} ---", result);
