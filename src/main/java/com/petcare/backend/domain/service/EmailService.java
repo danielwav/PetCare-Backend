@@ -62,10 +62,14 @@ public class EmailService {
             message.setTo(to);
             message.setSubject(subject);
             message.setText(text);
+            log.info("Intentando enviar correo a {} (host: {}, port: {})", to,
+                    System.getenv().getOrDefault("MAIL_HOST", "smtp.gmail.com"),
+                    System.getenv().getOrDefault("MAIL_PORT", "587"));
             mailSender.send(message);
-            log.info("Correo enviado a {} — asunto: {}", to, subject);
+            log.info("Correo enviado exitosamente a {} — asunto: {}", to, subject);
         } catch (Exception e) {
             log.error("Error SMTP al enviar a {}: {} — {}", to, e.getClass().getSimpleName(), e.getMessage());
+            log.error("StackTrace completo:", e);
         }
     }
 
