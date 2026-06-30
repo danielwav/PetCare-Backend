@@ -16,8 +16,8 @@ public interface DetalleCostoCitaRepository extends JpaRepository<DetalleCostoCi
 			select d.nombreServicio, sum(d.cantidad), sum(d.total)
 			from DetalleCostoCita d
 			join d.cita c
-			where (:fechaInicio is null or c.fecha >= :fechaInicio)
-			and (:fechaFin is null or c.fecha <= :fechaFin)
+			where (cast(:fechaInicio as date) is null or c.fecha >= :fechaInicio)
+			and (cast(:fechaFin as date) is null or c.fecha <= :fechaFin)
 			group by d.nombreServicio
 			order by sum(d.cantidad) desc, sum(d.total) desc
 			""")

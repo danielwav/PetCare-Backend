@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +30,6 @@ public class CitaController {
 
 	@PostMapping("/api/citas")
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public CitaResponse create(@Valid @RequestBody CitaRequest request, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return citaService.createAsDuenio(request, authentication.getName());
@@ -40,7 +38,6 @@ public class CitaController {
 	}
 
 	@GetMapping("/api/citas")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public List<CitaResponse> findAll(
 			@RequestParam(required = false) EstadoCita estado,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
@@ -56,7 +53,6 @@ public class CitaController {
 	}
 
 	@GetMapping("/api/citas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO', 'DUENIO')")
 	public CitaResponse findById(@PathVariable Long id, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return citaService.findByIdForDuenio(id, authentication.getName());
@@ -65,13 +61,11 @@ public class CitaController {
 	}
 
 	@PutMapping("/api/citas/{id}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public CitaResponse update(@PathVariable Long id, @Valid @RequestBody CitaRequest request) {
 		return citaService.update(id, request);
 	}
 
 	@PatchMapping("/api/citas/{id}/cancelar")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public CitaResponse cancel(@PathVariable Long id, Authentication authentication) {
 		if (isDuenioOnly(authentication)) {
 			return citaService.cancelAsDuenio(id, authentication.getName());
@@ -80,7 +74,6 @@ public class CitaController {
 	}
 
 	@PatchMapping("/api/citas/{id}/confirmar")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'DUENIO')")
 	public CitaResponse confirm(@PathVariable Long id, Authentication authentication) {
 		String confirmedBy = authentication == null ? "sistema" : authentication.getName();
 		if (isDuenioOnly(authentication)) {
@@ -90,7 +83,6 @@ public class CitaController {
 	}
 
 	@GetMapping("/api/citas/alertas-confirmacion")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE')")
 	public List<CitaResponse> findConfirmationAlerts(@RequestParam(required = false) Integer horas) {
 		return citaService.findConfirmationAlerts(horas);
 	}

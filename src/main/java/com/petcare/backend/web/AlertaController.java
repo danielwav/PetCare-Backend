@@ -3,26 +3,36 @@ package com.petcare.backend.web;
 import com.petcare.backend.domain.dto.response.PanelAlertasDiaResponse;
 import com.petcare.backend.domain.service.AlertaService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
 public class AlertaController {
 
-	private final AlertaService alertaService;
+    private static final Logger log = LoggerFactory.getLogger(AlertaController.class);
 
-	@GetMapping("/api/alertas/dia")
-	@PreAuthorize("hasAnyRole('ADMIN', 'ASISTENTE', 'VETERINARIO')")
-	public PanelAlertasDiaResponse getDailyPanel(
-			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
-			@RequestParam(required = false) Integer diasVacunas
-	) {
-		return alertaService.getDailyPanel(fecha, diasVacunas);
-	}
+    private final AlertaService alertaService;
+
+    @GetMapping("/api/alertas/dia")
+    public ResponseEntity<?> getDailyPanel() {
+        log.info("Solicitando alertas del día");
+        try {
+            PanelAlertasDiaResponse panel = alertaService.getDailyPanel(null, null);
+            log.info("Alertas generadas: {} citas, {} vacunas, {} controles pendientes",
+                    panel.totalCitasProgramadasHoy(),
+                    panel.totalVacunasProximas(),
+                    panel.totalControlesMensualesPendientes());
+            return ResponseEntity.ok(panel);
+        } catch (Exception e) {
+            log.error("Error al generar alertas del día: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getClass().getSimpleName(), "message", e.getMessage()));
+        }
+    }
 }

@@ -132,8 +132,8 @@ class DuenioServiceTest {
 
 	@Test
 	void createDuenioLinksExistingDuenioUserByEmail() {
-		authService.register(new RegisterRequest("Admin", "admin.link@test.com", "secret123"));
-		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.link@test.com", "secret123"));
+		authService.register(new RegisterRequest("Admin", "admin.link@test.com", "000000000", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.link@test.com", "000000000", "secret123"));
 
 		DuenioResponse owner = duenioService.create(new DuenioRequest(
 				null,
@@ -152,9 +152,9 @@ class DuenioServiceTest {
 
 	@Test
 	void duenioCanOnlyReadAndUpdateOwnProfile() {
-		authService.register(new RegisterRequest("Admin", "admin.duenio@test.com", "secret123"));
-		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.duenio@test.com", "secret123"));
-		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.duenio@test.com", "secret123"));
+		authService.register(new RegisterRequest("Admin", "admin.duenio@test.com", "000000000", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.duenio@test.com", "000000000", "secret123"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.duenio@test.com", "000000000", "secret123"));
 
 		DuenioResponse owner = duenioService.create(new DuenioRequest(
 				ownerUser.user().id(),

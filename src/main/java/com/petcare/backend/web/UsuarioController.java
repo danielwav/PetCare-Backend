@@ -9,7 +9,6 @@ import com.petcare.backend.domain.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,38 +24,38 @@ public class UsuarioController {
 
     @PostMapping("/internal")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
     public Map<String, String> createInternal(@Valid @RequestBody CreateInternalUserRequest request) {
         String token = authService.createInternalUser(request);
         return Map.of("message", "Usuario creado exitosamente.", "activationToken", token);
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public List<UserResponse> findAll() {
         return usuarioService.findAll();
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse findById(@PathVariable Long id) {
         return usuarioService.findById(id);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
         return usuarioService.update(id, request);
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        usuarioService.hardDelete(id);
+    }
+
     @PatchMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse toggleActive(@PathVariable Long id) {
         return usuarioService.toggleActive(id);
     }
 
     @PutMapping("/{id}/roles")
-    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse updateRoles(@PathVariable Long id, @Valid @RequestBody UpdateUserRolesRequest request) {
         return usuarioService.updateRoles(id, request);
     }

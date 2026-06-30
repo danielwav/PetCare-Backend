@@ -123,6 +123,24 @@ public class DuenioService {
 		duenio.setDireccion(normalizeNullableText(request.direccion()));
 		duenio.setUpdatedAt(LocalDateTime.now());
 
+		Usuario usuario = duenio.getUsuario();
+		if (usuario == null) {
+			usuario = usuarioRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
+		}
+		if (usuario != null) {
+			String fullName = (request.nombres() + " " + request.apellidos()).trim();
+			usuario.setFullName(fullName);
+			usuario.setTelefono(request.telefono().trim());
+			String newEmail = normalizeEmail(request.email());
+			if (!usuario.getEmail().equals(newEmail)) {
+				if (usuarioRepository.existsByEmail(newEmail)) {
+					throw new IllegalArgumentException("El correo ya esta registrado por otro usuario.");
+				}
+				usuario.setEmail(newEmail);
+			}
+			usuarioRepository.save(usuario);
+		}
+
 		return toResponse(duenioRepository.save(duenio));
 	}
 

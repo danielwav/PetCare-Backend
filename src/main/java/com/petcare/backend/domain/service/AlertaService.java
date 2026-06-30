@@ -95,10 +95,12 @@ public class AlertaService {
 	}
 
 	private AlertaCitaResponse toCitaAlert(Cita cita) {
+		String telefono = cita.getDuenio().getTelefono();
 		return new AlertaCitaResponse(
 				cita.getId(),
 				cita.getDuenio().getId(),
 				fullName(cita.getDuenio().getNombres(), cita.getDuenio().getApellidos()),
+				telefono != null ? telefono : "",
 				cita.getMascota().getId(),
 				cita.getMascota().getNombre(),
 				cita.getVeterinario().getId(),

@@ -11,21 +11,7 @@ public interface MascotaRepository extends JpaRepository<Mascota, Long> {
 
 	List<Mascota> findByDuenioIdOrderByNombreAsc(Long duenioId);
 
-	@Query("""
-			select m from Mascota m
-			join fetch m.duenio d
-			where (:active is null or m.active = :active)
-			and (:duenioId is null or d.id = :duenioId)
-			and (
-				:search is null
-				or lower(m.nombre) like lower(concat('%', :search, '%'))
-				or lower(m.especie) like lower(concat('%', :search, '%'))
-				or lower(m.raza) like lower(concat('%', :search, '%'))
-				or lower(d.nombres) like lower(concat('%', :search, '%'))
-				or lower(d.apellidos) like lower(concat('%', :search, '%'))
-			)
-			order by m.nombre asc
-			""")
+	@Query(value = "select m.* from mascotas m join duenios d on d.id = m.duenio_id where (:active is null or m.active = :active) and (:duenioId is null or d.id = :duenioId) and (:search is null or upper(m.nombre) like upper('%' || :search || '%') or upper(m.especie) like upper('%' || :search || '%') or upper(m.raza) like upper('%' || :search || '%') or upper(d.nombres) like upper('%' || :search || '%') or upper(d.apellidos) like upper('%' || :search || '%')) order by m.nombre asc", nativeQuery = true)
 	List<Mascota> search(
 			@Param("search") String search,
 			@Param("duenioId") Long duenioId,

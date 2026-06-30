@@ -30,7 +30,6 @@ public class AsistenteService {
 
 	@Transactional
 	public AsistenteResponse create(AsistenteRequest request) {
-		validateUniqueEmail(request.email(), null);
 		validateUniqueDocument(request.numeroDocumento(), null);
 
 		Usuario usuario = resolveUsuarioForCreate(request);
@@ -41,12 +40,12 @@ public class AsistenteService {
 		LocalDateTime now = LocalDateTime.now();
 		Asistente asistente = Asistente.builder()
 				.usuario(usuario)
-				.nombres(normalizeText(request.nombres()))
-				.apellidos(normalizeText(request.apellidos()))
+				.nombres(coalesce(request.nombres(), usuario.getFullName()))
+				.apellidos("")
 				.tipoDocumento(normalizeText(request.tipoDocumento()))
 				.numeroDocumento(normalizeText(request.numeroDocumento()))
-				.telefono(request.telefono().trim())
-				.email(normalizeEmail(request.email()))
+				.telefono(coalesce(request.telefono(), usuario.getTelefono()))
+				.email(coalesce(request.email(), usuario.getEmail()))
 				.funciones(normalizeText(request.funciones()))
 				.active(true)
 				.createdAt(now)
@@ -60,6 +59,7 @@ public class AsistenteService {
 	public List<AsistenteResponse> findAll(String search, Boolean active) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 		return asistenteRepository.search(normalizedSearch, active).stream()
+				.filter(a -> a.getUsuario() != null)
 				.map(this::toResponse)
 				.toList();
 	}
@@ -72,7 +72,6 @@ public class AsistenteService {
 	@Transactional
 	public AsistenteResponse update(Long id, AsistenteRequest request) {
 		Asistente asistente = findEntityById(id);
-		validateUniqueEmail(request.email(), id);
 		validateUniqueDocument(request.numeroDocumento(), id);
 
 		Usuario usuario = resolveUsuarioForUpdate(request, asistente);
@@ -81,12 +80,12 @@ public class AsistenteService {
 		usuario = usuarioRepository.save(usuario);
 
 		asistente.setUsuario(usuario);
-		asistente.setNombres(normalizeText(request.nombres()));
-		asistente.setApellidos(normalizeText(request.apellidos()));
+		asistente.setNombres(coalesce(request.nombres(), usuario != null ? usuario.getFullName() : ""));
+		asistente.setApellidos("");
 		asistente.setTipoDocumento(normalizeText(request.tipoDocumento()));
 		asistente.setNumeroDocumento(normalizeText(request.numeroDocumento()));
-		asistente.setTelefono(request.telefono().trim());
-		asistente.setEmail(normalizeEmail(request.email()));
+		asistente.setTelefono(coalesce(request.telefono(), usuario != null ? usuario.getTelefono() : ""));
+		asistente.setEmail(coalesce(request.email(), usuario != null ? usuario.getEmail() : ""));
 		asistente.setFunciones(normalizeText(request.funciones()));
 		asistente.setUpdatedAt(LocalDateTime.now());
 
@@ -127,7 +126,7 @@ public class AsistenteService {
 			throw new IllegalArgumentException("El correo ya esta registrado para un usuario.");
 		}
 		return Usuario.builder()
-				.fullName(fullName(request.nombres(), request.apellidos()))
+				.fullName(coalesce(request.nombres(), email.split("@")[0]))
 				.email(email)
 				.password(passwordEncoder.encode(request.password()))
 				.active(true)
@@ -144,8 +143,12 @@ public class AsistenteService {
 		if (usuario == null) {
 			return resolveUsuarioForCreate(request);
 		}
-		usuario.setFullName(fullName(request.nombres(), request.apellidos()));
-		usuario.setEmail(normalizeEmail(request.email()));
+		if (request.nombres() != null && !request.nombres().isBlank()) {
+			usuario.setFullName(fullName(request.nombres(), request.apellidos()));
+		}
+		if (request.email() != null && !request.email().isBlank()) {
+			usuario.setEmail(normalizeEmail(request.email()));
+		}
 		if (request.password() != null && !request.password().isBlank()) {
 			usuario.setPassword(passwordEncoder.encode(request.password()));
 		}
@@ -180,6 +183,7 @@ public class AsistenteService {
 	}
 
 	private void validateUniqueEmail(String email, Long currentId) {
+		if (email == null || email.isBlank()) return;
 		String normalizedEmail = normalizeEmail(email);
 		asistenteRepository.findByEmail(normalizedEmail)
 				.filter(asistente -> currentId == null || !asistente.getId().equals(currentId))
@@ -216,11 +220,15 @@ public class AsistenteService {
 	}
 
 	private String normalizeEmail(String value) {
-		return value.trim().toLowerCase();
+		return value == null ? null : value.trim().toLowerCase();
 	}
 
 	private String normalizeText(String value) {
-		return value.trim();
+		return value == null ? "" : value.trim();
+	}
+
+	private String coalesce(String value, String fallback) {
+		return value != null && !value.isBlank() ? value.trim() : (fallback != null ? fallback : "");
 	}
 
 	private String fullName(String nombres, String apellidos) {

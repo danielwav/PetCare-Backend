@@ -1,49 +1,117 @@
 package com.petcare.backend.domain.service;
 
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class EmailService {
 
+    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
+
     private final JavaMailSender mailSender;
+    private final MailgunEmailSender mailgunSender;
 
-    @Value("${app.base-url:http://localhost:4200}")
-    private String baseUrl;
+    @Value("${MAIL_FROM:}")
+    private String mailFrom;
 
-    @Value("${spring.mail.username:}")
-    private String fromEmail;
+    @Value("${FRONTEND_URL:}")
+    private String frontendUrl;
 
+    @Async
     public void sendActivationEmail(String to, String fullName, String token) {
-        String link = baseUrl + "/auth/activate/" + token;
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail.isBlank() ? "noreply@petcare.com" : fromEmail);
-        message.setTo(to);
-        message.setSubject("PetCare - Activa tu cuenta");
-        message.setText("""
-                Hola %s,
-
-                Se ha creado una cuenta para ti en PetCare. Para activarla, haz clic en el siguiente enlace:
-
-                %s
-
-                Este enlace expirará en 7 días.
-
-                Si no esperabas este correo, ignóralo.
-
-                Saludos,
-                El equipo de PetCare
-                """.formatted(fullName, link));
-
-        try {
-            mailSender.send(message);
-        } catch (Exception e) {
-            System.err.println("Error al enviar correo a " + to + ": " + e.getMessage());
+        if (mailFrom == null || mailFrom.isBlank()) {
+            log.error("No se puede enviar el correo: MAIL_FROM no configurado");
+            return;
         }
+        if (frontendUrl == null || frontendUrl.isBlank()) {
+            log.error("No se puede enviar el correo: FRONTEND_URL no configurada");
+            return;
+        }
+        String link = frontendUrl.replaceAll("/+$", "") + "/activate-account?token=" + token;
+        String text = buildActivationText(fullName, link);
+        log.info("Enviando correo de activación a {} desde {}", to, mailFrom);
+        send(to, "PetCare - Activa tu cuenta", text);
+    }
+
+    @Async
+    public void sendPasswordRecoveryEmail(String to, String fullName, String token) {
+        if (mailFrom == null || mailFrom.isBlank()) {
+            log.error("No se puede enviar el correo: MAIL_FROM no configurado");
+            return;
+        }
+        if (frontendUrl == null || frontendUrl.isBlank()) {
+            log.error("No se puede enviar el correo: FRONTEND_URL no configurada");
+            return;
+        }
+        String link = frontendUrl.replaceAll("/+$", "") + "/reset-password?token=" + token;
+        String text = buildRecoveryText(fullName, link);
+        log.info("Enviando correo de recuperación a {} desde {}", to, mailFrom);
+        send(to, "PetCare - Recuperación de contraseña", text);
+    }
+
+    private void send(String to, String subject, String text) {
+        if (mailgunSender.isAvailable()) {
+            log.info("Usando Mailgun HTTP API para enviar a {}", to);
+            mailgunSender.send(to, subject, text);
+            return;
+        }
+        log.info("Mailgun no disponible, usando SMTP (host: {}, port: {})", to,
+                System.getenv().getOrDefault("MAIL_HOST", "smtp.gmail.com"),
+                System.getenv().getOrDefault("MAIL_PORT", "587"));
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailFrom);
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
+            mailSender.send(message);
+            log.info("Correo enviado exitosamente a {} — asunto: {}", to, subject);
+        } catch (Exception e) {
+            log.error("Error SMTP al enviar a {}: {} — {}", to, e.getClass().getSimpleName(), e.getMessage());
+            log.error("StackTrace completo:", e);
+        }
+    }
+
+    private String buildActivationText(String fullName, String link) {
+        return """
+Hola %s,
+
+Se ha creado una cuenta para ti en PetCare.
+
+Para activarla y crear tu contraseña, haz clic en el siguiente enlace:
+
+%s
+
+Este enlace expirará en 7 días.
+
+Si no esperabas este correo, ignóralo.
+
+© 2026 PetCare - Sistema de Gestión Veterinaria
+""".formatted(fullName, link);
+    }
+
+    private String buildRecoveryText(String fullName, String link) {
+        return """
+Hola %s,
+
+Recibimos una solicitud para restablecer tu contraseña en PetCare.
+
+Haz clic en el siguiente enlace para crear una nueva contraseña:
+
+%s
+
+Este enlace expirará en 1 hora.
+
+Si no solicitaste este cambio, ignora este correo.
+
+© 2026 PetCare - Sistema de Gestión Veterinaria
+""".formatted(fullName, link);
     }
 }

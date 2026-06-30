@@ -31,25 +31,26 @@ class AuthServiceTest {
 	private JwtService jwtService;
 
 	@Test
-	void registerDuenioUserAndLogin() {
+	void registerFirstUserAsAdminAndLogin() {
 		RegisterRequest registerRequest = new RegisterRequest(
-				"Duenio PetCare",
-				"duenio@petcare.test",
-				"duenio123"
+				"Administrador PetCare",
+				"admin@petcare.test",
+				"000000000",
+				"admin123"
 		);
 
 		AuthResponse registerResponse = authService.register(registerRequest);
-		AuthResponse loginResponse = authService.login(new LoginRequest("duenio@petcare.test", "duenio123"));
-		UserResponse currentUser = authService.me("duenio@petcare.test");
+		AuthResponse loginResponse = authService.login(new LoginRequest("admin@petcare.test", "admin123"));
+		UserResponse currentUser = authService.me("admin@petcare.test");
 
 		assertThat(registerResponse.accessToken()).isNotBlank();
 		assertThat(registerResponse.refreshToken()).isNotBlank();
 		assertThat(registerResponse.expiresInSeconds()).isEqualTo(3600);
-		assertThat(registerResponse.user().roles()).contains("ROLE_DUENIO");
+		assertThat(registerResponse.user().roles()).contains("ROLE_ADMIN");
 		assertThat(loginResponse.accessToken()).isNotBlank();
 		assertThat(loginResponse.refreshToken()).isNotBlank();
-		assertThat(currentUser.email()).isEqualTo("duenio@petcare.test");
-		assertThat(currentUser.roles()).contains("ROLE_DUENIO");
+		assertThat(currentUser.email()).isEqualTo("admin@petcare.test");
+		assertThat(currentUser.roles()).contains("ROLE_ADMIN");
 	}
 
 	@Test
@@ -57,6 +58,7 @@ class AuthServiceTest {
 		AuthResponse registerResponse = authService.register(new RegisterRequest(
 				"Administrador PetCare",
 				"admin.refresh@test.com",
+				"000000000",
 				"admin123"
 		));
 
@@ -72,7 +74,7 @@ class AuthServiceTest {
 
 	@Test
 	void registerDuenioUserLinksExistingDuenioByEmail() {
-		authService.register(new RegisterRequest("Administrador PetCare", "admin.link.auth@test.com", "admin123"));
+		authService.register(new RegisterRequest("Administrador PetCare", "admin.link.auth@test.com", "000000000", "admin123"));
 		DuenioResponse duenio = duenioService.create(new DuenioRequest(
 				null,
 				"Cliente",
@@ -87,6 +89,7 @@ class AuthServiceTest {
 		AuthResponse ownerUser = authService.register(new RegisterRequest(
 				"Cliente Sin Cuenta",
 				"cliente.link.auth@test.com",
+				"000000000",
 				"owner123"
 		));
 

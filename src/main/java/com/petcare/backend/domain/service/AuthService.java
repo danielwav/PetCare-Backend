@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -57,6 +59,7 @@ public class AuthService {
 		Usuario usuario = Usuario.builder()
 				.fullName(request.fullName())
 				.email(email)
+				.telefono(request.telefono())
 				.password(passwordEncoder.encode(request.password()))
 				.active(true)
 				.createdAt(LocalDateTime.now())
@@ -91,6 +94,12 @@ public class AuthService {
 
 	public UserResponse me(String email) {
 		return toUserResponse(findByEmail(email));
+	}
+
+	public UserResponse meById(Long id) {
+		Usuario usuario = usuarioRepository.findById(id)
+				.orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
+		return toUserResponse(usuario);
 	}
 
 	@Transactional
@@ -134,6 +143,26 @@ public class AuthService {
 		return token;
 	}
 
+	@Transactional(readOnly = true)
+	public Map<String, Object> validateActivationToken(String token) {
+		Usuario usuario = usuarioRepository.findByActivationToken(token)
+				.orElse(null);
+
+		if (usuario == null) {
+			return Map.of("valid", false, "reason", "INVALID_TOKEN");
+		}
+
+		if (usuario.getTokenExpiry() == null || usuario.getTokenExpiry().isBefore(LocalDateTime.now())) {
+			return Map.of("valid", false, "reason", "EXPIRED_TOKEN");
+		}
+
+		if (usuario.getActive()) {
+			return Map.of("valid", false, "reason", "ALREADY_ACTIVE");
+		}
+
+		return Map.of("valid", true, "email", usuario.getEmail(), "nombre", usuario.getFullName());
+	}
+
 	@Transactional
 	public void activateWithToken(String token, String password) {
 		Usuario usuario = usuarioRepository.findByActivationToken(token)
@@ -169,7 +198,32 @@ public class AuthService {
 		}
 
 		duenioRepository.findByEmail(usuario.getEmail())
-				.ifPresent(duenio -> linkDuenioToUser(duenio, usuario));
+				.ifPresentOrElse(
+						duenio -> linkDuenioToUser(duenio, usuario),
+						() -> createDuenioForUser(usuario)
+				);
+	}
+
+	@Transactional
+	protected void createDuenioForUser(Usuario usuario) {
+		String fullName = usuario.getFullName();
+		String[] parts = fullName.trim().split("\\s+", 2);
+		String nombres = parts[0];
+		String apellidos = parts.length > 1 ? parts[1] : "";
+
+		Duenio duenio = Duenio.builder()
+				.usuario(usuario)
+				.nombres(nombres)
+				.apellidos(apellidos)
+				.tipoDocumento("PENDIENTE")
+				.numeroDocumento("PENDIENTE-" + usuario.getId())
+				.telefono(usuario.getTelefono() != null ? usuario.getTelefono() : "000000000")
+				.email(usuario.getEmail())
+				.active(true)
+				.createdAt(LocalDateTime.now())
+				.updatedAt(LocalDateTime.now())
+				.build();
+		duenioRepository.save(duenio);
 	}
 
 	private void linkDuenioToUser(Duenio duenio, Usuario usuario) {
@@ -190,14 +244,15 @@ public class AuthService {
 				usuario.getId(),
 				usuario.getFullName(),
 				usuario.getEmail(),
+				usuario.getTelefono(),
 				usuario.getActive(),
 				roles
 		);
 	}
 
 	private AuthResponse buildAuthResponse(Usuario usuario) {
-		String accessToken = jwtService.generateAccessToken(usuario.getEmail());
-		String refreshToken = jwtService.generateRefreshToken(usuario.getEmail());
+		String accessToken = jwtService.generateAccessToken(usuario.getEmail(), usuario.getId());
+		String refreshToken = jwtService.generateRefreshToken(usuario.getEmail(), usuario.getId());
 		return new AuthResponse(
 				accessToken,
 				refreshToken,

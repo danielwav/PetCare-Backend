@@ -33,22 +33,24 @@ public class VeterinarioService {
 
 	@Transactional
 	public VeterinarioResponse create(VeterinarioRequest request) {
-		validateUniqueEmail(request.email(), null);
 		validateUniqueColegiatura(request.numeroColegiatura(), null);
 
 		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
+		if (usuario == null) {
+			throw new IllegalArgumentException("Debe seleccionar un usuario veterinario.");
+		}
 		validateUsuarioAvailable(usuario, null);
 		validateHorarios(request.horarios());
 
 		LocalDateTime now = LocalDateTime.now();
 		Veterinario veterinario = Veterinario.builder()
 				.usuario(usuario)
-				.nombres(normalizeText(request.nombres()))
-				.apellidos(normalizeText(request.apellidos()))
+				.nombres(coalesce(request.nombres(), usuario.getFullName()))
+				.apellidos("")
 				.numeroColegiatura(normalizeText(request.numeroColegiatura()))
 				.especialidad(normalizeText(request.especialidad()))
-				.telefono(request.telefono().trim())
-				.email(normalizeEmail(request.email()))
+				.telefono(coalesce(request.telefono(), usuario.getTelefono()))
+				.email(coalesce(request.email(), usuario.getEmail()))
 				.active(true)
 				.createdAt(now)
 				.updatedAt(now)
@@ -58,10 +60,41 @@ public class VeterinarioService {
 		return toResponse(veterinarioRepository.save(veterinario));
 	}
 
+	@Transactional
+	public VeterinarioResponse update(Long id, VeterinarioRequest request) {
+		Veterinario veterinario = findEntityById(id);
+
+		validateUniqueColegiatura(request.numeroColegiatura(), id);
+
+		Usuario usuario = request.usuarioId() != null
+				? usuarioRepository.findById(request.usuarioId())
+						.orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado."))
+				: veterinario.getUsuario();
+		validateUsuarioAvailable(usuario, id);
+		validateHorarios(request.horarios());
+
+		veterinario.setUsuario(usuario);
+		veterinario.setNombres(coalesce(request.nombres(), usuario != null ? usuario.getFullName() : ""));
+		veterinario.setApellidos("");
+		veterinario.setNumeroColegiatura(normalizeText(request.numeroColegiatura()));
+		veterinario.setEspecialidad(normalizeText(request.especialidad()));
+		veterinario.setTelefono(coalesce(request.telefono(), usuario != null ? usuario.getTelefono() : ""));
+		veterinario.setEmail(coalesce(request.email(), usuario != null ? usuario.getEmail() : ""));
+		veterinario.setUpdatedAt(LocalDateTime.now());
+
+		replaceHorarios(veterinario, request.horarios());
+		return toResponse(veterinarioRepository.save(veterinario));
+	}
+
+	private String coalesce(String value, String fallback) {
+		return value != null && !value.isBlank() ? value.trim() : (fallback != null ? fallback : "");
+	}
+
 	@Transactional(readOnly = true)
 	public List<VeterinarioResponse> findAll(String search, Boolean active) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 		return veterinarioRepository.search(normalizedSearch, active).stream()
+				.filter(v -> v.getUsuario() != null)
 				.map(this::toResponse)
 				.toList();
 	}
@@ -69,30 +102,6 @@ public class VeterinarioService {
 	@Transactional(readOnly = true)
 	public VeterinarioResponse findById(Long id) {
 		return toResponse(findEntityById(id));
-	}
-
-	@Transactional
-	public VeterinarioResponse update(Long id, VeterinarioRequest request) {
-		Veterinario veterinario = findEntityById(id);
-
-		validateUniqueEmail(request.email(), id);
-		validateUniqueColegiatura(request.numeroColegiatura(), id);
-
-		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
-		validateUsuarioAvailable(usuario, id);
-		validateHorarios(request.horarios());
-
-		veterinario.setUsuario(usuario);
-		veterinario.setNombres(normalizeText(request.nombres()));
-		veterinario.setApellidos(normalizeText(request.apellidos()));
-		veterinario.setNumeroColegiatura(normalizeText(request.numeroColegiatura()));
-		veterinario.setEspecialidad(normalizeText(request.especialidad()));
-		veterinario.setTelefono(request.telefono().trim());
-		veterinario.setEmail(normalizeEmail(request.email()));
-		veterinario.setUpdatedAt(LocalDateTime.now());
-		replaceHorarios(veterinario, request.horarios());
-
-		return toResponse(veterinarioRepository.save(veterinario));
 	}
 
 	@Transactional
@@ -172,6 +181,7 @@ public class VeterinarioService {
 	}
 
 	private void validateUniqueEmail(String email, Long currentId) {
+		if (email == null || email.isBlank()) return;
 		String normalizedEmail = normalizeEmail(email);
 		veterinarioRepository.findByEmail(normalizedEmail)
 				.filter(veterinario -> currentId == null || !veterinario.getId().equals(currentId))
@@ -258,10 +268,14 @@ public class VeterinarioService {
 	}
 
 	private String normalizeEmail(String value) {
-		return value.trim().toLowerCase();
+		return value == null ? null : value.trim().toLowerCase();
 	}
 
 	private String normalizeText(String value) {
 		return value.trim();
+	}
+
+	private String normalizeNullableText(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

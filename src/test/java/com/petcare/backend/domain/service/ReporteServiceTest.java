@@ -23,12 +23,16 @@ import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.dto.response.VacunaResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
 import com.petcare.backend.domain.repository.CitaRepository;
+import com.petcare.backend.domain.repository.InasistenciaRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import com.petcare.backend.persistence.enums.SexoMascota;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -39,6 +43,7 @@ import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -67,13 +72,20 @@ class ReporteServiceTest {
 	private InasistenciaService inasistenciaService;
 
 	@Autowired
-	private VacunaService vacunaService;
-
-	@Autowired
 	private AtencionClinicaService atencionClinicaService;
 
 	@Autowired
 	private CitaRepository citaRepository;
+
+	@Autowired
+	private VacunaService vacunaService;
+
+	private Authentication auth;
+
+	@BeforeEach
+	void setUp() {
+		auth = mock(Authentication.class);
+	}
 
 	@Test
 	void buildOperationalAndClinicalReports() {
@@ -134,8 +146,9 @@ class ReporteServiceTest {
 				"Dieta blanda",
 				"Retornar en 3 dias",
 				"Paciente estable",
-				null
-		));
+				null,
+				EstadoMascota.PENDIENTE
+		), auth);
 
 		HistoriaClinicaResponse historia = reporteService.findHistoriaClinica(data.mascota().id());
 

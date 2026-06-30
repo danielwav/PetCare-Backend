@@ -42,6 +42,9 @@ public class Usuario {
 	@Column(nullable = false)
 	private String password;
 
+	@Column(length = 20)
+	private String telefono;
+
 	@Column(nullable = false)
 	private Boolean active;
 

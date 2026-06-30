@@ -10,10 +10,7 @@ import com.petcare.backend.domain.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,6 +48,17 @@ public class AuthController {
 	@GetMapping("/me")
 	public UserResponse me(Authentication authentication) {
 		return authService.me(authentication.getName());
+	}
+
+	@GetMapping("/activate-account")
+	public Map<String, Object> validateActivationToken(@RequestParam String token) {
+		return authService.validateActivationToken(token);
+	}
+
+	@PostMapping("/set-password")
+	public Map<String, String> setPassword(@Valid @RequestBody com.petcare.backend.domain.dto.request.SetPasswordRequest request) {
+		authService.activateWithToken(request.token(), request.password());
+		return Map.of("message", "Cuenta activada exitosamente. Ya puedes iniciar sesión.");
 	}
 
 	@PostMapping("/activate/{token}")

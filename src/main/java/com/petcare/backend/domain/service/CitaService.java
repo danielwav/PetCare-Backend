@@ -354,10 +354,12 @@ public class CitaService {
 	}
 
 	private CitaResponse toResponse(Cita cita) {
+		String telefono = cita.getDuenio().getTelefono();
 		return new CitaResponse(
 				cita.getId(),
 				cita.getDuenio().getId(),
 				fullName(cita.getDuenio().getNombres(), cita.getDuenio().getApellidos()),
+				telefono != null ? telefono : "",
 				cita.getMascota().getId(),
 				cita.getMascota().getNombre(),
 				cita.getVeterinario().getId(),

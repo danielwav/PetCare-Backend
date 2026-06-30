@@ -14,8 +14,10 @@ import com.petcare.backend.persistence.entity.ControlMensualMascota;
 import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Veterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import com.petcare.backend.persistence.enums.EstadoMascota;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +34,7 @@ public class AtencionClinicaService {
 	private final MascotaRepository mascotaRepository;
 
 	@Transactional
-	public AtencionClinicaResponse register(Long citaId, AtencionClinicaRequest request) {
+	public AtencionClinicaResponse register(Long citaId, AtencionClinicaRequest request, Authentication authentication) {
 		Cita cita = citaRepository.findById(citaId)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
 
@@ -57,6 +59,11 @@ public class AtencionClinicaService {
 		cita.setEstado(EstadoCita.ATENDIDA);
 		cita.setRequiereConfirmacion(false);
 		cita.setUpdatedAt(LocalDateTime.now());
+
+		Mascota mascota = cita.getMascota();
+		mascota.setEstado(request.estadoMascota());
+		mascota.setFechaEstado(LocalDateTime.now());
+		mascota.setVeterinarioEstado(cita.getVeterinario().getNombres() + " " + cita.getVeterinario().getApellidos());
 
 		return toResponse(atencionClinicaRepository.save(atencion));
 	}
@@ -86,6 +93,9 @@ public class AtencionClinicaService {
 				mascota.getNombre(),
 				mascota.getDuenio().getId(),
 				fullName(mascota.getDuenio().getNombres(), mascota.getDuenio().getApellidos()),
+				mascota.getEstado(),
+				mascota.getFechaEstado(),
+				mascota.getVeterinarioEstado(),
 				atenciones,
 				controles
 		);
