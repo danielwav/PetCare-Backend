@@ -9,28 +9,39 @@ Backend del sistema PetCare, una API REST para gestión veterinaria: usuarios, d
 - Spring Web MVC + Spring Security
 - JWT con JJWT
 - Spring Data JPA + Hibernate 7
-- PostgreSQL (NeonDB)
+- PostgreSQL (AWS RDS)
 - H2 para pruebas
 - Maven + Lombok
 - Bean Validation
 - Gmail SMTP (envío de correos)
-- Resend API (envío de correos alternativo)
 - SpringDoc OpenAPI / Swagger UI
 - JUnit 5, Mockito y AssertJ
 - JaCoCo para cobertura
+- AWS Elastic Beanstalk (deploy backend)
+- AWS S3 + CloudFront (deploy frontend)
+- AWS RDS PostgreSQL 16 (base de datos)
 
 ## Deploy
 
-- **Render** (Docker): `https://petcare-backend-o9go.onrender.com`
-- Rama `dev` se despliega automáticamente en Render
-- Swagger: `https://petcare-backend-o9go.onrender.com/swagger-ui.html`
-- Health: `https://petcare-backend-o9go.onrender.com/api/health`
+### AWS (Producción actual)
+
+- **Backend API**: `https://d1eq863qpgnni5.cloudfront.net/api`
+- **Frontend Web**: `https://d29ubrdgpv6m22.cloudfront.net`
+- **Elastic Beanstalk**: `http://petcare-backend-prod.eba-238cqfih.us-east-1.elasticbeanstalk.com`
+- **Base de Datos**: RDS PostgreSQL 16 (`petcare-db.ccteeoyow1ii.us-east-1.rds.amazonaws.com`)
+- **CloudFront (Frontend)**: `d29ubrdgpv6m22.cloudfront.net`
+- **CloudFront (Backend)**: `d1eq863qpgnni5.cloudfront.net`
+
+### Render (Legacy)
+
+- **Backend**: `https://petcare-backend-o9go.onrender.com`
+- **Swagger**: `https://petcare-backend-o9go.onrender.com/swagger-ui.html`
 
 ## Estructura del proyecto
 
 ```text
 src/main/java/com/petcare/backend
-|-- config        CORS, seguridad, OpenAPI, async, Resend
+|-- config        CORS, seguridad, OpenAPI, async
 |-- domain
 |   |-- dto       Request y Response DTOs
 |   |-- repository Interfaces Spring Data JPA
@@ -47,7 +58,7 @@ src/main/java/com/petcare/backend
 
 - Java 21
 - Maven Wrapper incluido
-- PostgreSQL (o NeonDB en la nube)
+- PostgreSQL (AWS RDS en producción)
 
 ### Variables de entorno (producción)
 
@@ -60,7 +71,9 @@ src/main/java/com/petcare/backend
 | `MAIL_USERNAME` | Correo Gmail para envío SMTP |
 | `MAIL_PASSWORD` | App password de Gmail |
 | `FRONTEND_URL` | URL del frontend para enlaces de activación |
-| `SERVER_PORT` | Puerto del servidor (Render asigna 10000) |
+| `SERVER_PORT` | Puerto del servidor (Render: 10000, AWS: 5000) |
+| `JPA_DDL_AUTO` | Modo Hibernate (update/validate/create) |
+| `MAIL_ENABLED` | Habilitar envío de correos (true/false) |
 
 ### Configuración local
 
@@ -70,6 +83,9 @@ export DB_USERNAME=postgres
 export DB_PASSWORD=postgres
 export JWT_SECRET=UGV0Q2FyZS1EZXZlbG9wbWVudC1KMFQtU2VjcmV0
 export FRONTEND_URL=http://localhost:4200
+export MAIL_USERNAME=tcovenas456@gmail.com
+export MAIL_PASSWORD=xufv oldj fpqx hlzp
+export MAIL_ENABLED=true
 ```
 
 ## Ejecutar localmente
@@ -134,10 +150,11 @@ target/site/jacoco/index.html
 
 - `main`: producción estable
 - `dev`: integración continua (desplegada en Render)
-- `prueba`: desarrollo diario
+- `prueba`: desarrollo diario (desplegada en AWS Elastic Beanstalk)
 
 ## Frontend
 
+- Web (AWS CloudFront): `https://d29ubrdgpv6m22.cloudfront.net`
 - Web (GitHub Pages): `https://pabloyman-01.github.io/PetCare-Frontend/`
 - APK Android: se genera con Capacitor desde el frontend
 - iOS: proyecto Xcode en `ios/`

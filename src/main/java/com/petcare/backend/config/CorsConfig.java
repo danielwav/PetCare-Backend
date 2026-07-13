@@ -23,7 +23,9 @@ public class CorsConfig {
                 "https://*.onrender.com",
                 "https://*.vercel.app",
                 "https://*.netlify.app",
-                "https://*.github.io"
+                "https://*.github.io",
+                "https://*.cloudfront.net",
+                "http://*.elasticbeanstalk.com"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
