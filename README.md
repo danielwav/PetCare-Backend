@@ -144,7 +144,7 @@ target/site/jacoco/index.html
 | vet@petcare.com | vet123 | VETERINARIO |
 | asistente@petcare.com | asistente123 | ASISTENTE |
 | duenio@petcare.com | duenio123 | DUEÑO |
-| supervisor@petcare.com | 123456 | ADMIN + VETERINARIO |
+
 
 ## Ramas
 
