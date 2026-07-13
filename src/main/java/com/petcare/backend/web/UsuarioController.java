@@ -25,8 +25,7 @@ public class UsuarioController {
     @PostMapping("/internal")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, String> createInternal(@Valid @RequestBody CreateInternalUserRequest request) {
-        String token = authService.createInternalUser(request);
-        return Map.of("message", "Usuario creado exitosamente.", "activationToken", token);
+        return authService.createInternalUser(request);
     }
 
     @GetMapping

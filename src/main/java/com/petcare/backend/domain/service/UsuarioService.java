@@ -109,6 +109,7 @@ public class UsuarioService {
                 usuario.getEmail(),
                 usuario.getTelefono(),
                 usuario.getActive(),
+                usuario.getForcePasswordChange(),
                 roles
         );
     }

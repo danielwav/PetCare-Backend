@@ -8,6 +8,7 @@ public record UserResponse(
 		String email,
 		String telefono,
 		Boolean active,
+		Boolean forcePasswordChange,
 		Set<String> roles
 ) {
 }

@@ -48,6 +48,10 @@ public class Usuario {
 	@Column(nullable = false)
 	private Boolean active;
 
+	@Builder.Default
+	@Column(nullable = false)
+	private Boolean forcePasswordChange = false;
+
 	@Column(length = 255)
 	private String activationToken;
 

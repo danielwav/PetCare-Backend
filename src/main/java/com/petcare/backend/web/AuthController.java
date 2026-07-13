@@ -1,5 +1,6 @@
 package com.petcare.backend.web;
 
+import com.petcare.backend.domain.dto.request.ChangePasswordRequest;
 import com.petcare.backend.domain.dto.request.CreateInternalUserRequest;
 import com.petcare.backend.domain.dto.request.LoginRequest;
 import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
@@ -65,5 +66,11 @@ public class AuthController {
 	public Map<String, String> activateWithToken(@PathVariable String token, @RequestParam String password) {
 		authService.activateWithToken(token, password);
 		return Map.of("message", "Cuenta activada exitosamente. Ya puedes iniciar sesión.");
+	}
+
+	@PostMapping("/change-password")
+	public Map<String, String> changePassword(@Valid @RequestBody ChangePasswordRequest request, Authentication authentication) {
+		authService.changePassword(authentication.getName(), request.currentPassword(), request.newPassword());
+		return Map.of("message", "Contraseña cambiada exitosamente.");
 	}
 }

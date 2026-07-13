@@ -25,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -103,7 +104,7 @@ public class AuthService {
 	}
 
 	@Transactional
-	public String createInternalUser(CreateInternalUserRequest request) {
+	public Map<String, String> createInternalUser(CreateInternalUserRequest request) {
 		String email = request.email().toLowerCase();
 		if (usuarioRepository.existsByEmail(email)) {
 			throw new IllegalArgumentException("El correo ya esta registrado.");
@@ -114,33 +115,82 @@ public class AuthService {
 		try {
 			roleName = RoleName.valueOf("ROLE_" + roleStr);
 		} catch (IllegalArgumentException e) {
-			throw new IllegalArgumentException("Rol invalido. Use VETERINARIO o ASISTENTE.");
+			throw new IllegalArgumentException("Rol invalido. Use VETERINARIO, ASISTENTE o DUENIO.");
 		}
 
-		if (roleName == RoleName.ROLE_ADMIN || roleName == RoleName.ROLE_DUENIO) {
+		if (roleName == RoleName.ROLE_ADMIN) {
 			throw new IllegalArgumentException("No puedes asignar este rol desde aqui.");
 		}
 
 		Rol role = rolRepository.findByName(roleName)
 				.orElseThrow(() -> new IllegalStateException("Rol no encontrado: " + roleName));
 
-		String token = UUID.randomUUID().toString();
+		String temporaryPassword = generateSecurePassword();
 		String fullName = request.nombres() + " " + request.apellidos();
 
 		Usuario usuario = Usuario.builder()
 				.fullName(fullName)
 				.email(email)
-				.password(passwordEncoder.encode(token))
-				.active(false)
-				.activationToken(token)
-				.tokenExpiry(LocalDateTime.now().plusDays(7))
+				.password(passwordEncoder.encode(temporaryPassword))
+				.active(true)
+				.forcePasswordChange(true)
 				.createdAt(LocalDateTime.now())
 				.roles(Set.of(role))
 				.build();
 
 		usuarioRepository.save(usuario);
-		emailService.sendActivationEmail(email, fullName, token);
-		return token;
+
+		if (roleName == RoleName.ROLE_DUENIO) {
+			linkExistingDuenioIfNeeded(usuario, roleName);
+		}
+
+		Map<String, String> result = new HashMap<>();
+		result.put("message", "Usuario creado exitosamente.");
+		result.put("temporaryPassword", temporaryPassword);
+		return result;
+	}
+
+	@Transactional
+	public void changePassword(String email, String currentPassword, String newPassword) {
+		Usuario usuario = findByEmail(email);
+
+		if (!passwordEncoder.matches(currentPassword, usuario.getPassword())) {
+			throw new IllegalArgumentException("La contrasena actual es incorrecta.");
+		}
+
+		usuario.setPassword(passwordEncoder.encode(newPassword));
+		usuario.setForcePasswordChange(false);
+		usuarioRepository.save(usuario);
+	}
+
+	private String generateSecurePassword() {
+		String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		String lower = "abcdefghijklmnopqrstuvwxyz";
+		String digits = "0123456789";
+		String special = "!@#$%^&*";
+		String all = upper + lower + digits + special;
+
+		SecureRandom random = new SecureRandom();
+		StringBuilder password = new StringBuilder();
+
+		password.append(upper.charAt(random.nextInt(upper.length())));
+		password.append(lower.charAt(random.nextInt(lower.length())));
+		password.append(digits.charAt(random.nextInt(digits.length())));
+		password.append(special.charAt(random.nextInt(special.length())));
+
+		for (int i = 4; i < 12; i++) {
+			password.append(all.charAt(random.nextInt(all.length())));
+		}
+
+		char[] chars = password.toString().toCharArray();
+		for (int i = chars.length - 1; i > 0; i--) {
+			int j = random.nextInt(i + 1);
+			char tmp = chars[i];
+			chars[i] = chars[j];
+			chars[j] = tmp;
+		}
+
+		return new String(chars);
 	}
 
 	@Transactional(readOnly = true)
@@ -246,6 +296,7 @@ public class AuthService {
 				usuario.getEmail(),
 				usuario.getTelefono(),
 				usuario.getActive(),
+				usuario.getForcePasswordChange(),
 				roles
 		);
 	}
