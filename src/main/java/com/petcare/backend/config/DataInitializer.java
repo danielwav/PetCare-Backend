@@ -93,17 +93,29 @@ public class DataInitializer implements CommandLineRunner {
         );
         for (var u : users) {
             var email = (String) u.get("email");
-            if (usuarioRepository.findByEmail(email).isPresent()) continue;
             @SuppressWarnings("unchecked")
             var roleSet = new HashSet<>((List<Rol>) u.get("roles"));
-            usuarioRepository.save(Usuario.builder()
-                    .fullName((String) u.get("name"))
-                    .email(email)
-                    .password(passwordEncoder.encode((String) u.get("pass")))
-                    .active(true)
-                    .createdAt(LocalDateTime.now())
-                    .roles(roleSet)
-                    .build());
+            var password = (String) u.get("pass");
+            var existingUser = usuarioRepository.findByEmail(email);
+            if (existingUser.isPresent()) {
+                var user = existingUser.get();
+                user.setFullName((String) u.get("name"));
+                user.setActive(true);
+                user.setRoles(roleSet);
+                if (!passwordEncoder.matches(password, user.getPassword())) {
+                    user.setPassword(passwordEncoder.encode(password));
+                }
+                usuarioRepository.save(user);
+            } else {
+                usuarioRepository.save(Usuario.builder()
+                        .fullName((String) u.get("name"))
+                        .email(email)
+                        .password(passwordEncoder.encode(password))
+                        .active(true)
+                        .createdAt(LocalDateTime.now())
+                        .roles(roleSet)
+                        .build());
+            }
         }
     }
 
