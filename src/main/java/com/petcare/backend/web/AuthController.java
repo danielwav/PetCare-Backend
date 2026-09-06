@@ -3,6 +3,7 @@ package com.petcare.backend.web;
 import com.petcare.backend.domain.dto.request.CreateInternalUserRequest;
 import com.petcare.backend.domain.dto.request.LoginRequest;
 import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
+import com.petcare.backend.domain.dto.request.RegisterClinicRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
@@ -33,6 +34,12 @@ public class AuthController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
 		return authService.register(request);
+	}
+
+	@PostMapping("/register-clinic")
+	@ResponseStatus(HttpStatus.CREATED)
+	public AuthResponse registerClinic(@Valid @RequestBody RegisterClinicRequest request) {
+		return authService.registerClinic(request);
 	}
 
 	@PostMapping("/login")
