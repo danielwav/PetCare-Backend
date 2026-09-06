@@ -3,12 +3,14 @@ package com.petcare.backend.domain.service;
 import com.petcare.backend.domain.dto.request.CreateInternalUserRequest;
 import com.petcare.backend.domain.dto.request.LoginRequest;
 import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
+import com.petcare.backend.domain.dto.request.RegisterClinicRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
 import com.petcare.backend.domain.repository.DuenioRepository;
 import com.petcare.backend.domain.repository.RolRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
@@ -45,6 +47,7 @@ public class AuthService {
 	private final DuenioRepository duenioRepository;
 	private final JwtProperties jwtProperties;
 	private final EmailService emailService;
+	private final ClinicaService clinicaService;
 
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
@@ -57,6 +60,8 @@ public class AuthService {
 		Rol role = rolRepository.findByName(roleName)
 				.orElseThrow(() -> new IllegalStateException("Rol base no encontrado: " + roleName));
 
+		Clinica clinica = clinicaService.getOrCreateDefaultClinic();
+
 		Usuario usuario = Usuario.builder()
 				.fullName(request.fullName())
 				.email(email)
@@ -65,10 +70,38 @@ public class AuthService {
 				.active(true)
 				.createdAt(LocalDateTime.now())
 				.roles(Set.of(role))
+				.clinica(clinica)
 				.build();
 
 		Usuario savedUser = usuarioRepository.save(usuario);
 		linkExistingDuenioIfNeeded(savedUser, roleName);
+		return buildAuthResponse(savedUser);
+	}
+
+	@Transactional
+	public AuthResponse registerClinic(RegisterClinicRequest request) {
+		String email = request.email().toLowerCase();
+		if (usuarioRepository.existsByEmail(email)) {
+			throw new IllegalArgumentException("El correo ya esta registrado.");
+		}
+
+		Clinica clinica = clinicaService.createClinic(request.clinicaNombre(), null);
+
+		Rol role = rolRepository.findByName(RoleName.ROLE_ADMIN)
+				.orElseThrow(() -> new IllegalStateException("Rol base no encontrado: " + RoleName.ROLE_ADMIN));
+
+		Usuario usuario = Usuario.builder()
+				.fullName(request.fullName())
+				.email(email)
+				.telefono(request.telefono())
+				.password(passwordEncoder.encode(request.password()))
+				.active(true)
+				.createdAt(LocalDateTime.now())
+				.roles(Set.of(role))
+				.clinica(clinica)
+				.build();
+
+		Usuario savedUser = usuarioRepository.save(usuario);
 		return buildAuthResponse(savedUser);
 	}
 

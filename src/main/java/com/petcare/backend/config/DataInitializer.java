@@ -3,6 +3,8 @@ package com.petcare.backend.config;
 import com.petcare.backend.domain.repository.*;
 import com.petcare.backend.persistence.entity.*;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import com.petcare.backend.persistence.enums.EstadoClinica;
+import com.petcare.backend.persistence.enums.PlanClinica;
 import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.persistence.enums.SexoMascota;
 import lombok.RequiredArgsConstructor;
@@ -39,11 +41,13 @@ public class DataInitializer implements CommandLineRunner {
     private final VacunaMascotaRepository vacunaMascotaRepository;
     private final ControlMensualMascotaRepository controlMensualMascotaRepository;
     private final HorarioVeterinarioRepository horarioVeterinarioRepository;
+    private final ClinicaRepository clinicaRepository;
 
     @Override
     public void run(String... args) {
         var roles = initRoles();
-        initUsuarios(roles);
+        var demoClinic = defaultClinica();
+        initUsuarios(roles, demoClinic);
         initServicios();
         initVacunas();
         initVeterinarios();
@@ -73,7 +77,21 @@ public class DataInitializer implements CommandLineRunner {
         return roles;
     }
 
-    private void initUsuarios(Map<RoleName, Rol> roles) {
+    private Clinica defaultClinica() {
+        return clinicaRepository.findBySlug("demo").orElseGet(() -> {
+            var now = LocalDateTime.now();
+            return clinicaRepository.save(Clinica.builder()
+                    .nombre("Clínica Demo")
+                    .slug("demo")
+                    .plan(PlanClinica.TRIAL)
+                    .estado(EstadoClinica.ACTIVA)
+                    .createdAt(now)
+                    .updatedAt(now)
+                    .build());
+        });
+    }
+
+    private void initUsuarios(Map<RoleName, Rol> roles, Clinica demoClinic) {
         var users = List.of(
                 Map.of("name", "Admin Sistema", "email", "admin@petcare.com", "pass", "admin123", "roles", List.of(roles.get(RoleName.ROLE_ADMIN))),
                 Map.of("name", "Laura Mendoza", "email", "laura.admin@petcare.com", "pass", "admin123", "roles", List.of(roles.get(RoleName.ROLE_ADMIN))),
@@ -102,6 +120,9 @@ public class DataInitializer implements CommandLineRunner {
                 user.setFullName((String) u.get("name"));
                 user.setActive(true);
                 user.setRoles(roleSet);
+                if (user.getClinica() == null) {
+                    user.setClinica(demoClinic);
+                }
                 if (!passwordEncoder.matches(password, user.getPassword())) {
                     user.setPassword(passwordEncoder.encode(password));
                 }
@@ -114,6 +135,7 @@ public class DataInitializer implements CommandLineRunner {
                         .active(true)
                         .createdAt(LocalDateTime.now())
                         .roles(roleSet)
+                        .clinica(demoClinic)
                         .build());
             }
         }
