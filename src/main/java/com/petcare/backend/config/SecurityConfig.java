@@ -38,6 +38,11 @@ public class SecurityConfig {
 								"/v3/api-docs/**"
 						).permitAll()
 
+						.requestMatchers(HttpMethod.GET, "/api/usuarios/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers("/api/usuarios/**")
+						.hasAuthority("ROLE_ADMIN")
+
 						.anyRequest().permitAll())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
