@@ -29,19 +29,19 @@ public class UsuarioService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public List<UserResponse> findAll() {
-        return usuarioRepository.findAll().stream()
+    public List<UserResponse> findAll(Long clinicaId) {
+        return usuarioRepository.findAllByClinicaId(clinicaId).stream()
                 .map(this::toUserResponse)
                 .toList();
     }
 
-    public UserResponse findById(Long id) {
-        return toUserResponse(findUsuario(id));
+    public UserResponse findById(Long id, Long clinicaId) {
+        return toUserResponse(findUsuario(id, clinicaId));
     }
 
     @Transactional
-    public UserResponse update(Long id, UpdateUserRequest request) {
-        Usuario usuario = findUsuario(id);
+    public UserResponse update(Long id, UpdateUserRequest request, Long clinicaId) {
+        Usuario usuario = findUsuario(id, clinicaId);
         String email = request.email().toLowerCase();
         if (!usuario.getEmail().equals(email) && usuarioRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("El correo ya esta registrado.");
@@ -53,8 +53,8 @@ public class UsuarioService {
     }
 
     @Transactional
-    public void hardDelete(Long id) {
-        Usuario usuario = findUsuario(id);
+    public void hardDelete(Long id, Long clinicaId) {
+        Usuario usuario = findUsuario(id, clinicaId);
         entityManager.createNativeQuery("UPDATE duenios SET usuario_id = NULL WHERE usuario_id = :id")
                 .setParameter("id", id).executeUpdate();
         entityManager.createNativeQuery("UPDATE veterinarios SET usuario_id = NULL WHERE usuario_id = :id")
@@ -67,15 +67,15 @@ public class UsuarioService {
     }
 
     @Transactional
-    public UserResponse toggleActive(Long id) {
-        Usuario usuario = findUsuario(id);
+    public UserResponse toggleActive(Long id, Long clinicaId) {
+        Usuario usuario = findUsuario(id, clinicaId);
         usuario.setActive(!usuario.getActive());
         return toUserResponse(usuarioRepository.save(usuario));
     }
 
     @Transactional
-    public UserResponse updateRoles(Long id, UpdateUserRolesRequest request) {
-        Usuario usuario = findUsuario(id);
+    public UserResponse updateRoles(Long id, UpdateUserRolesRequest request, Long clinicaId) {
+        Usuario usuario = findUsuario(id, clinicaId);
         Set<Rol> roles = request.roles().stream()
                 .map(roleName -> {
                     try {
@@ -97,6 +97,14 @@ public class UsuarioService {
     public Usuario findUsuario(Long id) {
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
+    }
+
+    private Usuario findUsuario(Long id, Long clinicaId) {
+        Usuario usuario = findUsuario(id);
+        if (usuario.getClinica() == null || !usuario.getClinica().getId().equals(clinicaId)) {
+            throw new org.springframework.security.access.AccessDeniedException("No tienes permiso para acceder a este usuario.");
+        }
+        return usuario;
     }
 
     private UserResponse toUserResponse(Usuario usuario) {

@@ -25,23 +25,30 @@ class ServicioServiceTest {
 	@Autowired
 	private ServicioService servicioService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void createFindUpdateAndDeactivateServicio() {
 		ServicioResponse created = servicioService.create(baseRequest(
 				"Consulta general",
 				"Evaluacion clinica basica.",
 				"50.00"
-		));
+		), clinicaId());
 
-		ServicioResponse found = servicioService.findById(created.id());
+		ServicioResponse found = servicioService.findById(created.id(), clinicaId());
 		ServicioResponse updated = servicioService.update(created.id(), baseRequest(
 				"Consulta veterinaria",
 				"Evaluacion clinica completa.",
 				"65.50"
-		));
+		), clinicaId());
 
-		servicioService.deactivate(created.id());
-		ServicioResponse inactive = servicioService.findById(created.id());
+		servicioService.deactivate(created.id(), clinicaId());
+		ServicioResponse inactive = servicioService.findById(created.id(), clinicaId());
 
 		assertThat(found.nombre()).isEqualTo("Consulta general");
 		assertThat(found.active()).isTrue();
@@ -52,10 +59,10 @@ class ServicioServiceTest {
 
 	@Test
 	void searchActiveServiciosAndRejectDuplicatedName() {
-		servicioService.create(baseRequest("Vacunacion", "Aplicacion de vacuna.", "80.00"));
-		servicioService.create(baseRequest("Bano medicado", "Servicio dermatologico.", "45.00"));
+		servicioService.create(baseRequest("Vacunacion", "Aplicacion de vacuna.", "80.00"), clinicaId());
+		servicioService.create(baseRequest("Bano medicado", "Servicio dermatologico.", "45.00"), clinicaId());
 
-		List<ServicioResponse> results = servicioService.findAll("vacuna", null);
+		List<ServicioResponse> results = servicioService.findAll("vacuna", null, clinicaId());
 
 		assertThat(results).hasSize(1);
 		assertThat(results.getFirst().nombre()).isEqualTo("Vacunacion");
@@ -63,7 +70,7 @@ class ServicioServiceTest {
 				"vacunacion",
 				"Nombre repetido.",
 				"90.00"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -72,12 +79,12 @@ class ServicioServiceTest {
 				"Consulta general",
 				"Evaluacion clinica basica.",
 				"50.00"
-		));
+		), clinicaId());
 		ServicioResponse vacuna = servicioService.create(baseRequest(
 				"Vacuna rabia",
 				"Aplicacion de vacuna antirrabica.",
 				"80.00"
-		));
+		), clinicaId());
 
 		CalculoCostoCitaResponse response = servicioService.calculateCost(new CalculoCostoCitaRequest(
 				List.of(
@@ -85,7 +92,7 @@ class ServicioServiceTest {
 						new CostoCitaServicioRequest(vacuna.id(), 2)
 				),
 				new BigDecimal("10.00")
-		));
+		), clinicaId());
 
 		assertThat(response.detalles()).hasSize(2);
 		assertThat(response.subtotal()).isEqualByComparingTo("210.00");
@@ -99,19 +106,19 @@ class ServicioServiceTest {
 				"Emergencia",
 				"Atencion prioritaria.",
 				"120.00"
-		));
+		), clinicaId());
 
 		assertThatThrownBy(() -> servicioService.calculateCost(new CalculoCostoCitaRequest(
 				List.of(new CostoCitaServicioRequest(servicio.id(), 1)),
 				new BigDecimal("121.00")
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 
-		servicioService.deactivate(servicio.id());
+		servicioService.deactivate(servicio.id(), clinicaId());
 
 		assertThatThrownBy(() -> servicioService.calculateCost(new CalculoCostoCitaRequest(
 				List.of(new CostoCitaServicioRequest(servicio.id(), 1)),
 				BigDecimal.ZERO
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private ServicioRequest baseRequest(String nombre, String descripcion, String costoBase) {

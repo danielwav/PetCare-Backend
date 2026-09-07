@@ -27,6 +27,13 @@ class DuenioServiceTest {
 	@Autowired
 	private AuthService authService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void createFindUpdateAndDeactivateDuenio() {
 		DuenioResponse created = duenioService.create(new DuenioRequest(
@@ -38,9 +45,9 @@ class DuenioServiceTest {
 				"999111222",
 				"maria.lopez@test.com",
 				"Av. PetCare 123"
-		));
+		), clinicaId());
 
-		DuenioResponse found = duenioService.findById(created.id());
+		DuenioResponse found = duenioService.findById(created.id(), clinicaId());
 		DuenioResponse updated = duenioService.update(created.id(), new DuenioRequest(
 				null,
 				"Maria Fernanda",
@@ -50,10 +57,10 @@ class DuenioServiceTest {
 				"999111333",
 				"maria.fernanda@test.com",
 				"Av. PetCare 456"
-		));
+		), clinicaId());
 
-		duenioService.deactivate(created.id());
-		DuenioResponse inactive = duenioService.findById(created.id());
+		duenioService.deactivate(created.id(), clinicaId());
+		DuenioResponse inactive = duenioService.findById(created.id(), clinicaId());
 
 		assertThat(found.email()).isEqualTo("maria.lopez@test.com");
 		assertThat(updated.nombres()).isEqualTo("Maria Fernanda");
@@ -72,7 +79,7 @@ class DuenioServiceTest {
 				"999222333",
 				"carlos.paredes@test.com",
 				null
-		));
+		), clinicaId());
 		DuenioResponse inactive = duenioService.create(new DuenioRequest(
 				null,
 				"Lucia",
@@ -82,11 +89,11 @@ class DuenioServiceTest {
 				"999333444",
 				"lucia.ramos@test.com",
 				null
-		));
-		duenioService.deactivate(inactive.id());
+		), clinicaId());
+		duenioService.deactivate(inactive.id(), clinicaId());
 
-		List<DuenioResponse> activeResults = duenioService.findAll("paredes", true);
-		List<DuenioResponse> inactiveResults = duenioService.findAll(null, false);
+		List<DuenioResponse> activeResults = duenioService.findAll("paredes", true, clinicaId());
+		List<DuenioResponse> inactiveResults = duenioService.findAll(null, false, clinicaId());
 
 		assertThat(activeResults).hasSize(1);
 		assertThat(activeResults.getFirst().email()).isEqualTo("carlos.paredes@test.com");
@@ -105,7 +112,7 @@ class DuenioServiceTest {
 				"999444555",
 				"ana.torres@test.com",
 				null
-		));
+		), clinicaId());
 
 		assertThatThrownBy(() -> duenioService.create(new DuenioRequest(
 				null,
@@ -116,7 +123,7 @@ class DuenioServiceTest {
 				"999444556",
 				"ana.torres@test.com",
 				null
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 
 		assertThatThrownBy(() -> duenioService.create(new DuenioRequest(
 				null,
@@ -127,7 +134,7 @@ class DuenioServiceTest {
 				"999444557",
 				"documento.duplicado@test.com",
 				null
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -144,7 +151,7 @@ class DuenioServiceTest {
 				"999444562",
 				"owner.link@test.com",
 				null
-		));
+		), clinicaId());
 
 		assertThat(owner.usuarioId()).isEqualTo(ownerUser.user().id());
 		assertThat(duenioService.findOwn(ownerUser.user().email()).id()).isEqualTo(owner.id());
@@ -165,7 +172,7 @@ class DuenioServiceTest {
 				"999444558",
 				"owner.profile@test.com",
 				null
-		));
+		), clinicaId());
 		DuenioResponse other = duenioService.create(new DuenioRequest(
 				otherUser.user().id(),
 				"Other",
@@ -175,7 +182,7 @@ class DuenioServiceTest {
 				"999444559",
 				"other.profile@test.com",
 				null
-		));
+		), clinicaId());
 
 		DuenioResponse ownProfile = duenioService.findOwn(ownerUser.user().email());
 		DuenioResponse updated = duenioService.updateOwn(owner.id(), new DuenioRequest(

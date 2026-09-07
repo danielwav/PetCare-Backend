@@ -54,6 +54,11 @@ public class ClinicaService {
 		return toResponse(findMyClinic(email));
 	}
 
+	@Transactional(readOnly = true)
+	public Long resolveClinicaId(String email) {
+		return findMyClinic(email.toLowerCase(Locale.ROOT)).getId();
+	}
+
 	@Transactional
 	public ClinicaResponse updateMyClinic(String email, UpdateClinicaRequest request) {
 		Clinica clinica = findMyClinic(email);

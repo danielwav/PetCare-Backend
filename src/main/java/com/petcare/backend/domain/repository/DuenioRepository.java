@@ -22,6 +22,6 @@ public interface DuenioRepository extends JpaRepository<Duenio, Long> {
 
 	Optional<Duenio> findByUsuarioEmail(String email);
 
-	@Query(value = "select d.* from duenios d where (:active is null or d.active = :active) and (:search is null or upper(d.nombres) like upper('%' || :search || '%') or upper(d.apellidos) like upper('%' || :search || '%') or upper(d.email) like upper('%' || :search || '%') or d.numero_documento like ('%' || :search || '%')) order by d.apellidos asc, d.nombres asc", nativeQuery = true)
-	List<Duenio> search(@Param("search") String search, @Param("active") Boolean active);
+	@Query(value = "select d.* from duenios d where (:clinicaId is null or d.clinica_id = :clinicaId) and (:active is null or d.active = :active) and (:search is null or upper(d.nombres) like upper('%' || :search || '%') or upper(d.apellidos) like upper('%' || :search || '%') or upper(d.email) like upper('%' || :search || '%') or d.numero_documento like ('%' || :search || '%')) order by d.apellidos asc, d.nombres asc", nativeQuery = true)
+	List<Duenio> search(@Param("clinicaId") Long clinicaId, @Param("search") String search, @Param("active") Boolean active);
 }

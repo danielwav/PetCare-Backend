@@ -3,6 +3,7 @@ package com.petcare.backend.web;
 import com.petcare.backend.domain.dto.request.CitaRequest;
 import com.petcare.backend.domain.dto.response.CitaResponse;
 import com.petcare.backend.domain.service.CitaService;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import java.util.List;
 public class CitaController {
 
 	private final CitaService citaService;
+	private final ClinicaService clinicaService;
 
 	@PostMapping("/api/citas")
 	@ResponseStatus(HttpStatus.CREATED)
@@ -34,7 +36,7 @@ public class CitaController {
 		if (isDuenioOnly(authentication)) {
 			return citaService.createAsDuenio(request, authentication.getName());
 		}
-		return citaService.create(request);
+		return citaService.create(request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/citas")
@@ -49,7 +51,7 @@ public class CitaController {
 		if (isDuenioOnly(authentication)) {
 			return citaService.findAllForDuenio(authentication.getName(), estado, fecha, mascotaId, veterinarioId);
 		}
-		return citaService.findAll(estado, fecha, duenioId, mascotaId, veterinarioId);
+		return citaService.findAll(estado, fecha, duenioId, mascotaId, veterinarioId, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/citas/{id}")
@@ -57,12 +59,12 @@ public class CitaController {
 		if (isDuenioOnly(authentication)) {
 			return citaService.findByIdForDuenio(id, authentication.getName());
 		}
-		return citaService.findById(id);
+		return citaService.findById(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PutMapping("/api/citas/{id}")
-	public CitaResponse update(@PathVariable Long id, @Valid @RequestBody CitaRequest request) {
-		return citaService.update(id, request);
+	public CitaResponse update(@PathVariable Long id, @Valid @RequestBody CitaRequest request, Authentication authentication) {
+		return citaService.update(id, request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PatchMapping("/api/citas/{id}/cancelar")
@@ -70,7 +72,7 @@ public class CitaController {
 		if (isDuenioOnly(authentication)) {
 			return citaService.cancelAsDuenio(id, authentication.getName());
 		}
-		return citaService.cancel(id);
+		return citaService.cancel(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PatchMapping("/api/citas/{id}/confirmar")
@@ -79,12 +81,12 @@ public class CitaController {
 		if (isDuenioOnly(authentication)) {
 			return citaService.confirmAsDuenio(id, confirmedBy);
 		}
-		return citaService.confirm(id, confirmedBy);
+		return citaService.confirm(id, confirmedBy, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/citas/alertas-confirmacion")
-	public List<CitaResponse> findConfirmationAlerts(@RequestParam(required = false) Integer horas) {
-		return citaService.findConfirmationAlerts(horas);
+	public List<CitaResponse> findConfirmationAlerts(@RequestParam(required = false) Integer horas, Authentication authentication) {
+		return citaService.findConfirmationAlerts(horas, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	private boolean isDuenioOnly(Authentication authentication) {

@@ -5,14 +5,17 @@ import com.petcare.backend.domain.dto.request.VeterinarioRequest;
 import com.petcare.backend.domain.dto.response.DisponibilidadVeterinarioResponse;
 import com.petcare.backend.domain.dto.response.HorarioVeterinarioResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
+import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.HorarioVeterinarioRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.domain.repository.VeterinarioRepository;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.HorarioVeterinario;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.entity.Veterinario;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,20 +33,26 @@ public class VeterinarioService {
 	private final VeterinarioRepository veterinarioRepository;
 	private final HorarioVeterinarioRepository horarioVeterinarioRepository;
 	private final UsuarioRepository usuarioRepository;
+	private final ClinicaRepository clinicaRepository;
 
 	@Transactional
-	public VeterinarioResponse create(VeterinarioRequest request) {
+	public VeterinarioResponse create(VeterinarioRequest request, Long clinicaId) {
 		validateUniqueColegiatura(request.numeroColegiatura(), null);
 
 		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
 		if (usuario == null) {
 			throw new IllegalArgumentException("Debe seleccionar un usuario veterinario.");
 		}
+		validateUsuarioBelongsToClinic(usuario, clinicaId);
 		validateUsuarioAvailable(usuario, null);
 		validateHorarios(request.horarios());
 
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
+
 		LocalDateTime now = LocalDateTime.now();
 		Veterinario veterinario = Veterinario.builder()
+				.clinica(clinica)
 				.usuario(usuario)
 				.nombres(coalesce(request.nombres(), usuario.getFullName()))
 				.apellidos("")
@@ -61,8 +70,11 @@ public class VeterinarioService {
 	}
 
 	@Transactional
-	public VeterinarioResponse update(Long id, VeterinarioRequest request) {
-		Veterinario veterinario = findEntityById(id);
+	public VeterinarioResponse update(Long id, VeterinarioRequest request, Long clinicaId) {
+		Veterinario veterinario = findEntityById(id, clinicaId);
+		if (veterinario.getClinica() == null || !veterinario.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("No tienes permiso para acceder a este veterinario.");
+		}
 
 		validateUniqueColegiatura(request.numeroColegiatura(), id);
 
@@ -70,6 +82,7 @@ public class VeterinarioService {
 				? usuarioRepository.findById(request.usuarioId())
 						.orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado."))
 				: veterinario.getUsuario();
+		validateUsuarioBelongsToClinic(usuario, clinicaId);
 		validateUsuarioAvailable(usuario, id);
 		validateHorarios(request.horarios());
 
@@ -91,22 +104,22 @@ public class VeterinarioService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<VeterinarioResponse> findAll(String search, Boolean active) {
+	public List<VeterinarioResponse> findAll(String search, Boolean active, Long clinicaId) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
-		return veterinarioRepository.search(normalizedSearch, active).stream()
+		return veterinarioRepository.search(clinicaId, normalizedSearch, active).stream()
 				.filter(v -> v.getUsuario() != null)
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public VeterinarioResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public VeterinarioResponse findById(Long id, Long clinicaId) {
+		return toResponse(findEntityById(id, clinicaId));
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
-		Veterinario veterinario = findEntityById(id);
+	public void deactivate(Long id, Long clinicaId) {
+		Veterinario veterinario = findEntityById(id, clinicaId);
 		veterinario.setActive(false);
 		veterinario.setUpdatedAt(LocalDateTime.now());
 		veterinario.getHorarios().forEach(horario -> horario.setActive(false));
@@ -114,12 +127,12 @@ public class VeterinarioService {
 	}
 
 	@Transactional(readOnly = true)
-	public DisponibilidadVeterinarioResponse findDisponibilidad(Long id, LocalDate fecha, Integer duracionMinutos) {
+	public DisponibilidadVeterinarioResponse findDisponibilidad(Long id, LocalDate fecha, Integer duracionMinutos, Long clinicaId) {
 		if (fecha.isBefore(LocalDate.now())) {
 			throw new IllegalArgumentException("La fecha de disponibilidad no puede estar en el pasado.");
 		}
 
-		Veterinario veterinario = findEntityById(id);
+		Veterinario veterinario = findEntityById(id, clinicaId);
 		if (!veterinario.getActive()) {
 			throw new IllegalArgumentException("El veterinario no esta activo.");
 		}
@@ -157,6 +170,22 @@ public class VeterinarioService {
 	private Veterinario findEntityById(Long id) {
 		return veterinarioRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Veterinario no encontrado."));
+	}
+
+	private Veterinario findEntityById(Long id, Long clinicaId) {
+		return veterinarioRepository.findById(id)
+				.filter(veterinario -> veterinario.getClinica() != null
+						&& veterinario.getClinica().getId().equals(clinicaId))
+				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a este veterinario."));
+	}
+
+	private void validateUsuarioBelongsToClinic(Usuario usuario, Long clinicaId) {
+		if (usuario == null) {
+			return;
+		}
+		if (usuario.getClinica() == null || !usuario.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El usuario indicado no pertenece a tu clinica.");
+		}
 	}
 
 	private Usuario findUsuarioIfPresent(Long usuarioId) {

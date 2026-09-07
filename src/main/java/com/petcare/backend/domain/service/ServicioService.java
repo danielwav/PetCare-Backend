@@ -6,10 +6,13 @@ import com.petcare.backend.domain.dto.request.ServicioRequest;
 import com.petcare.backend.domain.dto.response.CalculoCostoCitaResponse;
 import com.petcare.backend.domain.dto.response.DetalleCostoCitaResponse;
 import com.petcare.backend.domain.dto.response.ServicioResponse;
+import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.ServicioRepository;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Servicio;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,13 +28,17 @@ public class ServicioService {
 	private static final int MONEY_SCALE = 2;
 
 	private final ServicioRepository servicioRepository;
+	private final ClinicaRepository clinicaRepository;
 
 	@Transactional
-	public ServicioResponse create(ServicioRequest request) {
-		validateUniqueName(request.nombre(), null);
+	public ServicioResponse create(ServicioRequest request, Long clinicaId) {
+		validateUniqueName(request.nombre(), null, clinicaId);
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
 
 		LocalDateTime now = LocalDateTime.now();
 		Servicio servicio = Servicio.builder()
+				.clinica(clinica)
 				.nombre(normalizeText(request.nombre()))
 				.descripcion(normalizeText(request.descripcion()))
 				.costoBase(normalizeMoney(request.costoBase()))
@@ -44,24 +51,24 @@ public class ServicioService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<ServicioResponse> findAll(String search, Boolean active) {
+	public List<ServicioResponse> findAll(String search, Boolean active, Long clinicaId) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 		Boolean activeFilter = active == null ? true : active;
-		return servicioRepository.search(normalizedSearch, activeFilter).stream()
+		return servicioRepository.search(clinicaId, normalizedSearch, activeFilter).stream()
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public ServicioResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public ServicioResponse findById(Long id, Long clinicaId) {
+		return toResponse(findEntityById(id, clinicaId));
 	}
 
 	@Transactional
-	public ServicioResponse update(Long id, ServicioRequest request) {
-		Servicio servicio = findEntityById(id);
+	public ServicioResponse update(Long id, ServicioRequest request, Long clinicaId) {
+		Servicio servicio = findEntityById(id, clinicaId);
 
-		validateUniqueName(request.nombre(), id);
+		validateUniqueName(request.nombre(), id, clinicaId);
 
 		servicio.setNombre(normalizeText(request.nombre()));
 		servicio.setDescripcion(normalizeText(request.descripcion()));
@@ -72,25 +79,25 @@ public class ServicioService {
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
-		Servicio servicio = findEntityById(id);
+	public void deactivate(Long id, Long clinicaId) {
+		Servicio servicio = findEntityById(id, clinicaId);
 		servicio.setActive(false);
 		servicio.setUpdatedAt(LocalDateTime.now());
 		servicioRepository.save(servicio);
 	}
 
 	@Transactional
-	public ServicioResponse activate(Long id) {
-		Servicio servicio = findEntityById(id);
+	public ServicioResponse activate(Long id, Long clinicaId) {
+		Servicio servicio = findEntityById(id, clinicaId);
 		servicio.setActive(true);
 		servicio.setUpdatedAt(LocalDateTime.now());
 		return toResponse(servicioRepository.save(servicio));
 	}
 
 	@Transactional(readOnly = true)
-	public CalculoCostoCitaResponse calculateCost(CalculoCostoCitaRequest request) {
+	public CalculoCostoCitaResponse calculateCost(CalculoCostoCitaRequest request, Long clinicaId) {
 		List<DetalleCostoCitaResponse> detalles = request.servicios().stream()
-				.map(this::calculateDetail)
+				.map(item -> calculateDetail(item, clinicaId))
 				.toList();
 		BigDecimal subtotal = detalles.stream()
 				.map(DetalleCostoCitaResponse::subtotal)
@@ -106,8 +113,8 @@ public class ServicioService {
 		return new CalculoCostoCitaResponse(detalles, subtotal, descuento, total);
 	}
 
-	private DetalleCostoCitaResponse calculateDetail(CostoCitaServicioRequest request) {
-		Servicio servicio = findEntityById(request.servicioId());
+	private DetalleCostoCitaResponse calculateDetail(CostoCitaServicioRequest request, Long clinicaId) {
+		Servicio servicio = findEntityById(request.servicioId(), clinicaId);
 		if (!servicio.getActive()) {
 			throw new IllegalArgumentException("El servicio " + servicio.getNombre() + " no esta activo.");
 		}
@@ -125,14 +132,16 @@ public class ServicioService {
 		);
 	}
 
-	private Servicio findEntityById(Long id) {
+	private Servicio findEntityById(Long id, Long clinicaId) {
 		return servicioRepository.findById(id)
-				.orElseThrow(() -> new EntityNotFoundException("Servicio no encontrado."));
+				.filter(servicio -> servicio.getClinica() != null
+						&& servicio.getClinica().getId().equals(clinicaId))
+				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a este servicio."));
 	}
 
-	private void validateUniqueName(String nombre, Long currentId) {
+	private void validateUniqueName(String nombre, Long currentId, Long clinicaId) {
 		String normalizedName = normalizeText(nombre);
-		servicioRepository.findByNombreIgnoreCase(normalizedName)
+		servicioRepository.findByClinicaIdAndNombreIgnoreCase(clinicaId, normalizedName)
 				.filter(servicio -> currentId == null || !servicio.getId().equals(currentId))
 				.ifPresent(servicio -> {
 					throw new IllegalArgumentException("El nombre del servicio ya esta registrado.");

@@ -61,6 +61,13 @@ class VacunaServiceTest {
 	@Autowired
 	private CitaService citaService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void createUpdateAndDeactivateVaccineCatalog() {
 		VacunaResponse created = vacunaService.create(baseVacunaRequest("Rabia", 365));
@@ -85,7 +92,7 @@ class VacunaServiceTest {
 	void registerVaccineForPetAndCalculateNextDose() {
 		TestData data = createBaseData();
 		VacunaResponse vacuna = vacunaService.create(baseVacunaRequest("Triple felina", 180));
-		CitaResponse cita = citaService.create(baseCitaRequest(data));
+		CitaResponse cita = citaService.create(baseCitaRequest(data), clinicaId());
 
 		VacunaMascotaResponse applied = vacunaService.registerForMascota(data.mascota().id(), new VacunaMascotaRequest(
 				vacuna.id(),
@@ -95,8 +102,8 @@ class VacunaServiceTest {
 				"LOTE-001",
 				null,
 				"Primera dosis aplicada sin reacciones."
-		));
-		List<VacunaMascotaResponse> petVaccines = vacunaService.findByMascota(data.mascota().id());
+		), data.veterinario().id(), clinicaId());
+		List<VacunaMascotaResponse> petVaccines = vacunaService.findByMascota(data.mascota().id(), clinicaId());
 
 		assertThat(applied.fechaProximaDosis()).isEqualTo(LocalDate.now().plusDays(180));
 		assertThat(applied.citaId()).isEqualTo(cita.id());
@@ -116,10 +123,10 @@ class VacunaServiceTest {
 				null,
 				LocalDate.now().plusDays(15),
 				"Proxima dosis indicada manualmente."
-		));
+		), data.veterinario().id(), clinicaId());
 
-		List<VacunaMascotaResponse> upcoming = vacunaService.findUpcoming(20);
-		List<VacunaMascotaResponse> alerts = vacunaService.findAlerts(null);
+		List<VacunaMascotaResponse> upcoming = vacunaService.findUpcoming(20, clinicaId());
+		List<VacunaMascotaResponse> alerts = vacunaService.findAlerts(null, clinicaId());
 
 		assertThat(upcoming).extracting(VacunaMascotaResponse::id).contains(applied.id());
 		assertThat(alerts).extracting(VacunaMascotaResponse::id).contains(applied.id());
@@ -140,7 +147,7 @@ class VacunaServiceTest {
 				null,
 				null,
 				null
-		))).isInstanceOf(IllegalArgumentException.class);
+		), data.veterinario().id(), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -160,7 +167,7 @@ class VacunaServiceTest {
 				"LOTE-OWNER",
 				null,
 				"Aplicada a mascota propia."
-		));
+		), ownerData.veterinario().id(), clinicaId());
 		vacunaService.registerForMascota(otherData.mascota().id(), new VacunaMascotaRequest(
 				otherVaccine.id(),
 				otherData.veterinario().id(),
@@ -169,7 +176,7 @@ class VacunaServiceTest {
 				"LOTE-OTHER",
 				null,
 				"Aplicada a mascota ajena."
-		));
+		), otherData.veterinario().id(), clinicaId());
 
 		List<VacunaMascotaResponse> ownHistory = vacunaService.findByMascotaForDuenio(
 				ownerData.mascota().id(),
@@ -205,7 +212,7 @@ class VacunaServiceTest {
 				"999888777",
 				duenioEmail,
 				"Av. Siempre Viva 123"
-		));
+		), clinicaId());
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				mascotaNombre,
@@ -217,7 +224,7 @@ class VacunaServiceTest {
 				new BigDecimal("12.50"),
 				"Sin observaciones",
 				null
-		));
+		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,
 				"Ana",
@@ -232,12 +239,12 @@ class VacunaServiceTest {
 						LocalTime.of(11, 0),
 						30
 				))
-		));
+		), clinicaId());
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
 				servicioNombre,
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
-		));
+		), clinicaId());
 
 		return new TestData(duenio, mascota, veterinario, consulta);
 	}

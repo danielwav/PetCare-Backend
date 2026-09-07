@@ -30,6 +30,13 @@ class AuthServiceTest {
 	@Autowired
 	private JwtService jwtService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void registerFirstUserAsAdminAndLogin() {
 		RegisterRequest registerRequest = new RegisterRequest(
@@ -84,7 +91,7 @@ class AuthServiceTest {
 				"999123456",
 				"cliente.link.auth@test.com",
 				null
-		));
+		), clinicaId());
 
 		AuthResponse ownerUser = authService.register(new RegisterRequest(
 				"Cliente Sin Cuenta",

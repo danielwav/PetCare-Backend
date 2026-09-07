@@ -49,6 +49,9 @@ class AtencionClinicaServiceTest {
 	private AtencionClinicaService atencionClinicaService;
 
 	@Autowired
+	private ClinicaService clinicaService;
+
+	@Autowired
 	private ControlMensualMascotaService controlMensualMascotaService;
 
 	@Autowired
@@ -70,6 +73,10 @@ class AtencionClinicaServiceTest {
 		auth = mock(Authentication.class);
 	}
 
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Autowired
 	private VeterinarioService veterinarioService;
 
@@ -79,11 +86,11 @@ class AtencionClinicaServiceTest {
 	@Test
 	void registerClinicalAttentionAndAddToHistory() {
 		TestData data = createBaseData();
-		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 		moveCitaToPast(cita.id());
 
 		AtencionClinicaResponse atencion = atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth);
-		CitaResponse updatedCita = citaService.findById(cita.id());
+		CitaResponse updatedCita = citaService.findById(cita.id(), clinicaId());
 		HistoriaClinicaResponse historia = atencionClinicaService.findHistoriaClinicaByMascota(data.mascota().id());
 
 		assertThat(atencion.citaId()).isEqualTo(cita.id());
@@ -97,7 +104,7 @@ class AtencionClinicaServiceTest {
 	@Test
 	void rejectDuplicateOrFutureClinicalAttention() {
 		TestData data = createBaseData();
-		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 
 		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth))
 				.isInstanceOf(IllegalArgumentException.class);
@@ -156,7 +163,7 @@ class AtencionClinicaServiceTest {
 				"999888777",
 				"daniel@test.com",
 				"Av. Siempre Viva 123"
-		));
+		), clinicaId());
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				"Firulais",
@@ -168,7 +175,7 @@ class AtencionClinicaServiceTest {
 				new BigDecimal("12.50"),
 				"Sin observaciones",
 				null
-		));
+		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,
 				"Ana",
@@ -183,12 +190,12 @@ class AtencionClinicaServiceTest {
 						LocalTime.of(11, 0),
 						30
 				))
-		));
+		), clinicaId());
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
 				"Consulta general",
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
-		));
+		), clinicaId());
 
 		return new TestData(duenio, mascota, veterinario, consulta);
 	}

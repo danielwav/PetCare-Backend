@@ -55,6 +55,7 @@ public class DataInitializer implements CommandLineRunner {
         initDuenios();
         initMascotas();
         initCitas();
+        backfillClinica(demoClinic);
     }
 
     private Map<RoleName, Rol> initRoles() {
@@ -89,6 +90,45 @@ public class DataInitializer implements CommandLineRunner {
                     .updatedAt(now)
                     .build());
         });
+    }
+
+    private void backfillClinica(Clinica clinica) {
+        for (var d : duenioRepository.findAll()) {
+            if (d.getClinica() == null) {
+                d.setClinica(clinica);
+                duenioRepository.save(d);
+            }
+        }
+        for (var v : veterinarioRepository.findAll()) {
+            if (v.getClinica() == null) {
+                v.setClinica(clinica);
+                veterinarioRepository.save(v);
+            }
+        }
+        for (var a : asistenteRepository.findAll()) {
+            if (a.getClinica() == null) {
+                a.setClinica(clinica);
+                asistenteRepository.save(a);
+            }
+        }
+        for (var s : servicioRepository.findAll()) {
+            if (s.getClinica() == null) {
+                s.setClinica(clinica);
+                servicioRepository.save(s);
+            }
+        }
+        for (var m : mascotaRepository.findAll()) {
+            if (m.getClinica() == null) {
+                m.setClinica(clinica);
+                mascotaRepository.save(m);
+            }
+        }
+        for (var c : citaRepository.findAll()) {
+            if (c.getClinica() == null) {
+                c.setClinica(clinica);
+                citaRepository.save(c);
+            }
+        }
     }
 
     private void initUsuarios(Map<RoleName, Rol> roles, Clinica demoClinic) {

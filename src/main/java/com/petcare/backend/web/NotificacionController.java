@@ -4,6 +4,7 @@ import com.petcare.backend.domain.dto.response.CitaResponse;
 import com.petcare.backend.domain.dto.response.NotificacionResponse;
 import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.service.CitaService;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.VacunaService;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class NotificacionController {
 
     private final CitaService citaService;
     private final VacunaService vacunaService;
+    private final ClinicaService clinicaService;
 
     @GetMapping("/api/notificaciones")
     public List<NotificacionResponse> getNotificaciones(Authentication authentication) {
@@ -51,7 +53,8 @@ public class NotificacionController {
                     citasHoy = citaService.findAllForDuenio(email, EstadoCita.PROGRAMADA, today, null, null);
                     citasManana = citaService.findAllForDuenio(email, null, today.plusDays(1), null, null);
                 } else {
-                    citasHoy = citaService.findAll(EstadoCita.PROGRAMADA, today, null, null, null);
+                    Long clinicaId = clinicaService.resolveClinicaId(authentication.getName());
+                    citasHoy = citaService.findAll(EstadoCita.PROGRAMADA, today, null, null, null, clinicaId);
                 }
                 for (var c : citasHoy) {
                     notificaciones.add(new NotificacionResponse(
@@ -74,7 +77,8 @@ public class NotificacionController {
 
             // Citas sin confirmar (ADMIN, ASISTENTE — módulo Alertas/Citas)
             if (isAdmin || isAsistente) {
-                var citasSinConfirmar = citaService.findAll(EstadoCita.PROGRAMADA, null, null, null, null).stream()
+                Long clinicaId = clinicaService.resolveClinicaId(authentication.getName());
+                var citasSinConfirmar = citaService.findAll(EstadoCita.PROGRAMADA, null, null, null, null, clinicaId).stream()
                     .filter(c -> Boolean.TRUE.equals(c.requiereConfirmacion()) && !c.fecha().isBefore(today))
                     .toList();
                 for (var c : citasSinConfirmar) {
@@ -88,7 +92,8 @@ public class NotificacionController {
 
             // Atención pendiente (solo VET — módulo Atención Clínica)
             if (isVet) {
-                var citasConfirmadas = citaService.findAll(EstadoCita.CONFIRMADA, today, null, null, null);
+                Long clinicaId = clinicaService.resolveClinicaId(authentication.getName());
+                var citasConfirmadas = citaService.findAll(EstadoCita.CONFIRMADA, today, null, null, null, clinicaId);
                 for (var c : citasConfirmadas) {
                     notificaciones.add(new NotificacionResponse(
                         idGen.getAndIncrement(), "ATENCION_PENDIENTE",
@@ -106,7 +111,7 @@ public class NotificacionController {
                 if (isDuenio) {
                     vacunas = vacunaService.findAlertsForDuenio(30, authentication.getName());
                 } else {
-                    vacunas = vacunaService.findAlerts(30);
+                    vacunas = vacunaService.findAlerts(30, clinicaService.resolveClinicaId(authentication.getName()));
                 }
                 for (var v : vacunas) {
                     notificaciones.add(new NotificacionResponse(

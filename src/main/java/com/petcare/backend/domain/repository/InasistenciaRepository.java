@@ -20,12 +20,14 @@ public interface InasistenciaRepository extends JpaRepository<Inasistencia, Long
 			join fetch i.cita c
 			join fetch i.duenio d
 			join fetch i.mascota m
-			where (cast(:duenioId as long) is null or d.id = :duenioId)
+			where (cast(:clinicaId as long) is null or d.clinica.id = :clinicaId)
+			and (cast(:duenioId as long) is null or d.id = :duenioId)
 			and (cast(:fechaInicio as timestamp) is null or i.fechaRegistro >= :fechaInicio)
 			and (cast(:fechaFin as timestamp) is null or i.fechaRegistro <= :fechaFin)
 			order by i.fechaRegistro desc
 			""")
 	List<Inasistencia> search(
+			@Param("clinicaId") Long clinicaId,
 			@Param("duenioId") Long duenioId,
 			@Param("fechaInicio") LocalDateTime fechaInicio,
 			@Param("fechaFin") LocalDateTime fechaFin

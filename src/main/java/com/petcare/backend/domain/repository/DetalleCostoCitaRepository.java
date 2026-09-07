@@ -16,12 +16,14 @@ public interface DetalleCostoCitaRepository extends JpaRepository<DetalleCostoCi
 			select d.nombreServicio, sum(d.cantidad), sum(d.total)
 			from DetalleCostoCita d
 			join d.cita c
-			where (cast(:fechaInicio as date) is null or c.fecha >= :fechaInicio)
+			where (cast(:clinicaId as long) is null or c.clinica.id = :clinicaId)
+			and (cast(:fechaInicio as date) is null or c.fecha >= :fechaInicio)
 			and (cast(:fechaFin as date) is null or c.fecha <= :fechaFin)
 			group by d.nombreServicio
 			order by sum(d.cantidad) desc, sum(d.total) desc
 			""")
 	List<Object[]> findMostRequestedServices(
+			@Param("clinicaId") Long clinicaId,
 			@Param("fechaInicio") LocalDate fechaInicio,
 			@Param("fechaFin") LocalDate fechaFin
 	);

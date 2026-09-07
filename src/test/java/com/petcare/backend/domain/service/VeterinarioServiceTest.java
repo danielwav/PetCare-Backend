@@ -26,15 +26,22 @@ class VeterinarioServiceTest {
 	@Autowired
 	private VeterinarioService veterinarioService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void createFindUpdateAndDeactivateVeterinario() {
 		VeterinarioResponse created = veterinarioService.create(baseRequest(
 				"CMVP-001",
 				"ana.vet@test.com",
 				"Medicina general"
-		));
+		), clinicaId());
 
-		VeterinarioResponse found = veterinarioService.findById(created.id());
+		VeterinarioResponse found = veterinarioService.findById(created.id(), clinicaId());
 		VeterinarioResponse updated = veterinarioService.update(created.id(), new VeterinarioRequest(
 				null,
 				"Ana Maria",
@@ -49,10 +56,10 @@ class VeterinarioServiceTest {
 						LocalTime.of(12, 0),
 						30
 				))
-		));
+		), clinicaId());
 
-		veterinarioService.deactivate(created.id());
-		VeterinarioResponse inactive = veterinarioService.findById(created.id());
+		veterinarioService.deactivate(created.id(), clinicaId());
+		VeterinarioResponse inactive = veterinarioService.findById(created.id(), clinicaId());
 
 		assertThat(found.email()).isEqualTo("ana.vet@test.com");
 		assertThat(found.horarios()).hasSize(1);
@@ -69,13 +76,14 @@ class VeterinarioServiceTest {
 				"CMVP-002",
 				"carlos.vet@test.com",
 				"Cirugia menor"
-		));
+		), clinicaId());
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
 
 		DisponibilidadVeterinarioResponse disponibilidad = veterinarioService.findDisponibilidad(
 				veterinario.id(),
 				nextMonday,
-				null
+				null,
+				clinicaId()
 		);
 
 		assertThat(disponibilidad.fecha()).isEqualTo(nextMonday);
@@ -89,9 +97,9 @@ class VeterinarioServiceTest {
 
 	@Test
 	void searchByEspecialidadAndRejectDuplicatedFields() {
-		veterinarioService.create(baseRequest("CMVP-003", "luisa.vet@test.com", "Odontologia"));
+		veterinarioService.create(baseRequest("CMVP-003", "luisa.vet@test.com", "Odontologia"), clinicaId());
 
-		List<VeterinarioResponse> results = veterinarioService.findAll("odonto", true);
+		List<VeterinarioResponse> results = veterinarioService.findAll("odonto", true, clinicaId());
 
 		assertThat(results).hasSize(1);
 		assertThat(results.getFirst().numeroColegiatura()).isEqualTo("CMVP-003");
@@ -100,13 +108,13 @@ class VeterinarioServiceTest {
 				"CMVP-003",
 				"otro.vet@test.com",
 				"Medicina general"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 
 		assertThatThrownBy(() -> veterinarioService.create(baseRequest(
 				"CMVP-004",
 				"luisa.vet@test.com",
 				"Medicina general"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -127,7 +135,7 @@ class VeterinarioServiceTest {
 				))
 		);
 
-		assertThatThrownBy(() -> veterinarioService.create(request))
+		assertThatThrownBy(() -> veterinarioService.create(request, clinicaId()))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 

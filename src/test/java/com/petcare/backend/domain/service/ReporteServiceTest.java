@@ -54,6 +54,9 @@ class ReporteServiceTest {
 	private ReporteService reporteService;
 
 	@Autowired
+	private ClinicaService clinicaService;
+
+	@Autowired
 	private CitaService citaService;
 
 	@Autowired
@@ -87,11 +90,15 @@ class ReporteServiceTest {
 		auth = mock(Authentication.class);
 	}
 
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void buildOperationalAndClinicalReports() {
 		TestData data = createBaseData();
 		LocalDate reportDate = nextDate(DayOfWeek.MONDAY);
-		CitaResponse cita = citaService.create(baseCitaRequest(data, reportDate));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, reportDate), clinicaId());
 		VacunaResponse vacuna = vacunaService.create(new VacunaRequest(
 				"Rabia",
 				"Proteccion antirrabica anual.",
@@ -105,7 +112,7 @@ class ReporteServiceTest {
 				null,
 				LocalDate.now().plusDays(10),
 				"Proxima dosis programada."
-		));
+		), data.veterinario().id(), clinicaId());
 
 		List<ReporteCitaResponse> citas = reporteService.findCitas(
 				EstadoCita.PROGRAMADA,
@@ -113,11 +120,12 @@ class ReporteServiceTest {
 				reportDate,
 				data.veterinario().id(),
 				data.mascota().id(),
-				data.duenio().id()
+				data.duenio().id(),
+				clinicaId()
 		);
-		ReporteCostoCitaResponse costo = reporteService.findCostoCita(cita.id());
-		List<ServicioSolicitadoResponse> servicios = reporteService.findServiciosMasSolicitados(reportDate, reportDate);
-		List<VacunaMascotaResponse> vacunas = reporteService.findVacunasProximas(LocalDate.now(), LocalDate.now().plusDays(15));
+		ReporteCostoCitaResponse costo = reporteService.findCostoCita(cita.id(), clinicaId());
+		List<ServicioSolicitadoResponse> servicios = reporteService.findServiciosMasSolicitados(reportDate, reportDate, clinicaId());
+		List<VacunaMascotaResponse> vacunas = reporteService.findVacunasProximas(LocalDate.now(), LocalDate.now().plusDays(15), clinicaId());
 
 		assertThat(citas).extracting(ReporteCitaResponse::id).contains(cita.id());
 		assertThat(costo.total()).isEqualByComparingTo("120.00");
@@ -130,15 +138,16 @@ class ReporteServiceTest {
 	@Test
 	void reportNoShowsAndClinicalHistory() {
 		TestData data = createBaseData();
-		CitaResponse noShowCita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse noShowCita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 		moveCitaToPast(noShowCita.id());
 		inasistenciaService.register(
 				noShowCita.id(),
 				new InasistenciaRequest("El duenio no asistio."),
-				"asistente@test.com"
+				"asistente@test.com",
+				clinicaId()
 		);
 
-		CitaResponse clinicalCita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse clinicalCita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 		moveCitaToPast(clinicalCita.id());
 		atencionClinicaService.register(clinicalCita.id(), new AtencionClinicaRequest(
 				"Control por vomitos",
@@ -150,12 +159,13 @@ class ReporteServiceTest {
 				EstadoMascota.PENDIENTE
 		), auth);
 
-		HistoriaClinicaResponse historia = reporteService.findHistoriaClinica(data.mascota().id());
+		HistoriaClinicaResponse historia = reporteService.findHistoriaClinica(data.mascota().id(), clinicaId());
 
 		assertThat(reporteService.findInasistencias(
 				data.duenio().id(),
 				LocalDate.now().minusDays(1),
-				LocalDate.now()
+				LocalDate.now(),
+				clinicaId()
 		)).hasSize(1);
 		assertThat(historia.atenciones()).hasSize(1);
 		assertThat(historia.mascotaId()).isEqualTo(data.mascota().id());
@@ -171,7 +181,7 @@ class ReporteServiceTest {
 				"999888777",
 				"daniel@test.com",
 				"Av. Siempre Viva 123"
-		));
+		), clinicaId());
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				"Firulais",
@@ -183,7 +193,7 @@ class ReporteServiceTest {
 				new BigDecimal("12.50"),
 				"Sin observaciones",
 				null
-		));
+		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,
 				"Ana",
@@ -198,17 +208,17 @@ class ReporteServiceTest {
 						LocalTime.of(11, 0),
 						30
 				))
-		));
+		), clinicaId());
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
 				"Consulta general",
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
-		));
+		), clinicaId());
 		ServicioResponse vacuna = servicioService.create(new ServicioRequest(
 				"Vacuna rabia",
 				"Aplicacion de vacuna.",
 				new BigDecimal("80.00")
-		));
+		), clinicaId());
 
 		return new TestData(duenio, mascota, veterinario, consulta, vacuna);
 	}

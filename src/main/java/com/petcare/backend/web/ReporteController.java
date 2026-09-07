@@ -7,10 +7,12 @@ import com.petcare.backend.domain.dto.response.ReporteCostoCitaResponse;
 import com.petcare.backend.domain.dto.response.ReporteServicioResponse;
 import com.petcare.backend.domain.dto.response.ServicioSolicitadoResponse;
 import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.ReporteService;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +26,7 @@ import java.util.List;
 public class ReporteController {
 
 	private final ReporteService reporteService;
+	private final ClinicaService clinicaService;
 
 	@GetMapping("/api/reportes/citas")
 	public List<ReporteCitaResponse> findCitas(
@@ -32,48 +35,52 @@ public class ReporteController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
 			@RequestParam(required = false) Long veterinarioId,
 			@RequestParam(required = false) Long mascotaId,
-			@RequestParam(required = false) Long duenioId
+			@RequestParam(required = false) Long duenioId,
+			Authentication authentication
 	) {
-		return reporteService.findCitas(estado, fechaInicio, fechaFin, veterinarioId, mascotaId, duenioId);
+		return reporteService.findCitas(estado, fechaInicio, fechaFin, veterinarioId, mascotaId, duenioId, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/reportes/inasistencias")
 	public List<InasistenciaResponse> findInasistencias(
 			@RequestParam(required = false) Long duenioId,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			Authentication authentication
 	) {
-		return reporteService.findInasistencias(duenioId, fechaInicio, fechaFin);
+		return reporteService.findInasistencias(duenioId, fechaInicio, fechaFin, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/reportes/vacunas-proximas")
 	public List<VacunaMascotaResponse> findVacunasProximas(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			Authentication authentication
 	) {
-		return reporteService.findVacunasProximas(fechaInicio, fechaFin);
+		return reporteService.findVacunasProximas(fechaInicio, fechaFin, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/reportes/citas/{id}/costos")
-	public ReporteCostoCitaResponse findCostoCita(@PathVariable Long id) {
-		return reporteService.findCostoCita(id);
+	public ReporteCostoCitaResponse findCostoCita(@PathVariable Long id, Authentication authentication) {
+		return reporteService.findCostoCita(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/reportes/servicios")
-	public ReporteServicioResponse findReporteServicios() {
-		return reporteService.findReporteServicios();
+	public ReporteServicioResponse findReporteServicios(Authentication authentication) {
+		return reporteService.findReporteServicios(clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/reportes/servicios-mas-solicitados")
 	public List<ServicioSolicitadoResponse> findServiciosMasSolicitados(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			Authentication authentication
 	) {
-		return reporteService.findServiciosMasSolicitados(fechaInicio, fechaFin);
+		return reporteService.findServiciosMasSolicitados(fechaInicio, fechaFin, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/reportes/mascotas/{id}/historia-clinica")
-	public HistoriaClinicaResponse findHistoriaClinica(@PathVariable Long id) {
-		return reporteService.findHistoriaClinica(id);
+	public HistoriaClinicaResponse findHistoriaClinica(@PathVariable Long id, Authentication authentication) {
+		return reporteService.findHistoriaClinica(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 }

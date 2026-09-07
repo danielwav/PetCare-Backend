@@ -31,11 +31,13 @@ public class MascotaService {
 	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
-	public MascotaResponse create(MascotaRequest request) {
+	public MascotaResponse create(MascotaRequest request, Long clinicaId) {
 		Duenio duenio = findActiveDuenioById(request.duenioId());
+		validateDuenioBelongsToClinic(duenio, clinicaId);
 		LocalDateTime now = LocalDateTime.now();
 
 		Mascota mascota = Mascota.builder()
+				.clinica(duenio.getClinica())
 				.duenio(duenio)
 				.nombre(normalizeText(request.nombre()))
 				.especie(normalizeText(request.especie()))
@@ -69,22 +71,22 @@ public class MascotaService {
 				request.pesoKg(),
 				request.observaciones(),
 				request.fotoUrl()
-		));
+		), duenio.getClinica().getId());
 	}
 
 	@Transactional(readOnly = true)
-	public List<MascotaResponse> findAll(String search, Long duenioId, Boolean active) {
+	public List<MascotaResponse> findAll(String search, Long duenioId, Boolean active, Long clinicaId) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
-		return mascotaRepository.search(normalizedSearch, duenioId, active).stream()
+		return mascotaRepository.search(clinicaId, normalizedSearch, duenioId, active).stream()
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public List<MascotaResponse> findByDuenio(Long duenioId) {
-		if (!duenioRepository.existsById(duenioId)) {
-			throw new EntityNotFoundException("Duenio no encontrado.");
-		}
+	public List<MascotaResponse> findByDuenio(Long duenioId, Long clinicaId) {
+		Duenio duenio = duenioRepository.findById(duenioId)
+				.orElseThrow(() -> new EntityNotFoundException("Duenio no encontrado."));
+		validateDuenioBelongsToClinic(duenio, clinicaId);
 
 		return mascotaRepository.findByDuenioIdOrderByNombreAsc(duenioId).stream()
 				.map(this::toResponse)
@@ -94,18 +96,19 @@ public class MascotaService {
 	@Transactional(readOnly = true)
 	public List<MascotaResponse> findAllForDuenio(String email, String search, Boolean active) {
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
-		return findAll(search, duenio.getId(), active);
+		return findAll(search, duenio.getId(), active, duenio.getClinica().getId());
 	}
 
 	@Transactional(readOnly = true)
 	public List<MascotaResponse> findByDuenioForDuenio(String email, Long duenioId) {
 		authenticatedDuenioService.validateOwnDuenio(email, duenioId);
-		return findByDuenio(duenioId);
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		return findByDuenio(duenioId, duenio.getClinica().getId());
 	}
 
 	@Transactional(readOnly = true)
-	public MascotaResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public MascotaResponse findById(Long id, Long clinicaId) {
+		return toResponse(findEntityById(id, clinicaId));
 	}
 
 	@Transactional(readOnly = true)
@@ -117,11 +120,13 @@ public class MascotaService {
 	}
 
 	@Transactional
-	public MascotaResponse update(Long id, MascotaRequest request) {
-		Mascota mascota = findEntityById(id);
+	public MascotaResponse update(Long id, MascotaRequest request, Long clinicaId) {
+		Mascota mascota = findEntityById(id, clinicaId);
 		Duenio duenio = findActiveDuenioById(request.duenioId());
+		validateDuenioBelongsToClinic(duenio, clinicaId);
 
 		mascota.setDuenio(duenio);
+		mascota.setClinica(duenio.getClinica());
 		mascota.setNombre(normalizeText(request.nombre()));
 		mascota.setEspecie(normalizeText(request.especie()));
 		mascota.setRaza(normalizeText(request.raza()));
@@ -166,8 +171,8 @@ public class MascotaService {
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
-		Mascota mascota = findEntityById(id);
+	public void deactivate(Long id, Long clinicaId) {
+		Mascota mascota = findEntityById(id, clinicaId);
 		cancelFutureCitas(id);
 		mascota.setActive(false);
 		mascota.setUpdatedAt(LocalDateTime.now());
@@ -186,6 +191,19 @@ public class MascotaService {
 	private Mascota findEntityById(Long id) {
 		return mascotaRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Mascota no encontrada."));
+	}
+
+	private Mascota findEntityById(Long id, Long clinicaId) {
+		return mascotaRepository.findById(id)
+				.filter(mascota -> mascota.getClinica() != null
+						&& mascota.getClinica().getId().equals(clinicaId))
+				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a esta mascota."));
+	}
+
+	private void validateDuenioBelongsToClinic(Duenio duenio, Long clinicaId) {
+		if (duenio.getClinica() == null || !duenio.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El duenio indicado no pertenece a tu clinica.");
+		}
 	}
 
 	private Duenio findActiveDuenioById(Long duenioId) {

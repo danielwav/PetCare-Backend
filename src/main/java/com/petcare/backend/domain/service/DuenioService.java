@@ -2,13 +2,16 @@ package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
+import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.DuenioRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,10 +24,11 @@ public class DuenioService {
 
 	private final DuenioRepository duenioRepository;
 	private final UsuarioRepository usuarioRepository;
+	private final ClinicaRepository clinicaRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
-	public DuenioResponse create(DuenioRequest request) {
+	public DuenioResponse create(DuenioRequest request, Long clinicaId) {
 		validateUniqueEmail(request.email(), null);
 		validateUniqueDocument(request.numeroDocumento(), null);
 
@@ -32,9 +36,16 @@ public class DuenioService {
 		if (usuario != null && duenioRepository.findByUsuarioId(usuario.getId()).isPresent()) {
 			throw new IllegalArgumentException("El usuario ya esta relacionado a un duenio.");
 		}
+		if (usuario != null && !belongsToClinic(usuario, clinicaId)) {
+			throw new AccessDeniedException("El usuario indicado no pertenece a tu clinica.");
+		}
+
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
 
 		LocalDateTime now = LocalDateTime.now();
 		Duenio duenio = Duenio.builder()
+				.clinica(clinica)
 				.usuario(usuario)
 				.nombres(normalizeText(request.nombres()))
 				.apellidos(normalizeText(request.apellidos()))
@@ -52,16 +63,16 @@ public class DuenioService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<DuenioResponse> findAll(String search, Boolean active) {
+	public List<DuenioResponse> findAll(String search, Boolean active, Long clinicaId) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
-		return duenioRepository.search(normalizedSearch, active).stream()
+		return duenioRepository.search(clinicaId, normalizedSearch, active).stream()
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public DuenioResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public DuenioResponse findById(Long id, Long clinicaId) {
+		return toResponse(findEntityById(id, clinicaId));
 	}
 
 	@Transactional(readOnly = true)
@@ -75,13 +86,16 @@ public class DuenioService {
 	}
 
 	@Transactional
-	public DuenioResponse update(Long id, DuenioRequest request) {
-		Duenio duenio = findEntityById(id);
+	public DuenioResponse update(Long id, DuenioRequest request, Long clinicaId) {
+		Duenio duenio = findEntityById(id, clinicaId);
 
 		validateUniqueEmail(request.email(), id);
 		validateUniqueDocument(request.numeroDocumento(), id);
 
 		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
+		if (usuario != null && !belongsToClinic(usuario, clinicaId)) {
+			throw new AccessDeniedException("El usuario indicado no pertenece a tu clinica.");
+		}
 		if (usuario != null) {
 			duenioRepository.findByUsuarioId(usuario.getId())
 					.filter(existing -> !existing.getId().equals(id))
@@ -145,8 +159,8 @@ public class DuenioService {
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
-		Duenio duenio = findEntityById(id);
+	public void deactivate(Long id, Long clinicaId) {
+		Duenio duenio = findEntityById(id, clinicaId);
 		duenio.setActive(false);
 		duenio.setUpdatedAt(LocalDateTime.now());
 		duenioRepository.save(duenio);
@@ -155,6 +169,17 @@ public class DuenioService {
 	private Duenio findEntityById(Long id) {
 		return duenioRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Duenio no encontrado."));
+	}
+
+	private Duenio findEntityById(Long id, Long clinicaId) {
+		return duenioRepository.findById(id)
+				.filter(duenio -> duenio.getClinica() != null
+						&& duenio.getClinica().getId().equals(clinicaId))
+				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a este duenio."));
+	}
+
+	private boolean belongsToClinic(Usuario usuario, Long clinicaId) {
+		return usuario.getClinica() != null && usuario.getClinica().getId().equals(clinicaId);
 	}
 
 	private Usuario findUsuarioIfPresent(Long usuarioId) {

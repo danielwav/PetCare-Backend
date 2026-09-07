@@ -26,6 +26,13 @@ class AsistenteServiceTest {
 	@Autowired
 	private AuthService authService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void createAssistantCreatesUserAndAssignsAssistantRole() {
 		AsistenteResponse created = asistenteService.create(baseRequest(
@@ -35,7 +42,7 @@ class AsistenteServiceTest {
 				"maria.asistente@test.com",
 				"Agenda de citas y atencion al cliente",
 				"secret123"
-		));
+		), clinicaId());
 
 		AuthResponse login = authService.login(new LoginRequest("maria.asistente@test.com", "secret123"));
 
@@ -53,7 +60,7 @@ class AsistenteServiceTest {
 				"rosa.asistente@test.com",
 				"Recepcion",
 				"secret123"
-		));
+		), clinicaId());
 
 		AsistenteResponse updated = asistenteService.update(created.id(), new AsistenteRequest(
 				null,
@@ -65,11 +72,11 @@ class AsistenteServiceTest {
 				"rosa.asistente@test.com",
 				"Recepcion, agenda y caja",
 				null
-		));
-		List<AsistenteResponse> results = asistenteService.findAll("caja", true);
-		asistenteService.deactivate(created.id());
-		AsistenteResponse inactive = asistenteService.findById(created.id());
-		AsistenteResponse active = asistenteService.activate(created.id());
+		), clinicaId());
+		List<AsistenteResponse> results = asistenteService.findAll("caja", true, clinicaId());
+		asistenteService.deactivate(created.id(), clinicaId());
+		AsistenteResponse inactive = asistenteService.findById(created.id(), clinicaId());
+		AsistenteResponse active = asistenteService.activate(created.id(), clinicaId());
 
 		assertThat(updated.funciones()).isEqualTo("Recepcion, agenda y caja");
 		assertThat(results).extracting(AsistenteResponse::id).containsExactly(created.id());
@@ -86,7 +93,7 @@ class AsistenteServiceTest {
 				"claudia.asistente@test.com",
 				"Recepcion",
 				"secret123"
-		));
+		), clinicaId());
 
 		assertThatThrownBy(() -> asistenteService.create(baseRequest(
 				"Claudia",
@@ -95,7 +102,7 @@ class AsistenteServiceTest {
 				"claudia.asistente@test.com",
 				"Agenda",
 				"secret123"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 		assertThatThrownBy(() -> asistenteService.create(baseRequest(
 				"Ana",
 				"Ramos",
@@ -103,7 +110,7 @@ class AsistenteServiceTest {
 				"ana.asistente@test.com",
 				"Caja",
 				"secret123"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private AsistenteRequest baseRequest(

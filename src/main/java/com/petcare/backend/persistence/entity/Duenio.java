@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -33,6 +34,10 @@ public class Duenio {
 	@OneToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "usuario_id", unique = true)
 	private Usuario usuario;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "clinica_id")
+	private Clinica clinica;
 
 	@Column(nullable = false, length = 80)
 	private String nombres;

@@ -101,7 +101,7 @@ public class VacunaService {
 	}
 
 	@Transactional
-	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, String email) {
+	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, String email, Long clinicaId) {
 		Long veterinarioId = request.veterinarioId();
 		if (veterinarioId == null || veterinarioId == 0) {
 			Long usuarioId = usuarioRepository.findByEmail(email)
@@ -112,23 +112,27 @@ public class VacunaService {
 					.orElse(null);
 			if (veterinarioId == null) {
 				veterinarioId = veterinarioRepository.findAll().stream()
+						.filter(v -> v.getClinica() != null && v.getClinica().getId().equals(clinicaId))
 						.findFirst()
 						.map(Veterinario::getId)
 						.orElseThrow(() -> new EntityNotFoundException("No hay veterinarios disponibles"));
 			}
 		}
-		return registerForMascota(mascotaId, request, veterinarioId);
+		return registerForMascota(mascotaId, request, veterinarioId, clinicaId);
 	}
 
-	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request) {
-		return registerForMascota(mascotaId, request, request.veterinarioId());
-	}
-
-	private VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, Long veterinarioId) {
+	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, Long veterinarioId, Long clinicaId) {
 		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
 		Vacuna vacuna = findVacuna(request.vacunaId());
 		Veterinario veterinario = veterinarioId != null && veterinarioId > 0 ? findVeterinario(veterinarioId) : null;
+		if (veterinario != null) {
+			validateVeterinarioBelongsToClinic(veterinario, clinicaId);
+		}
 		Cita cita = findCitaIfPresent(request.citaId());
+		if (cita != null) {
+			validateCitaBelongsToClinic(cita, clinicaId);
+		}
 
 		validateApplicationData(mascota, vacuna, veterinario, cita);
 
@@ -148,10 +152,9 @@ public class VacunaService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<VacunaMascotaResponse> findByMascota(Long mascotaId) {
-		if (!mascotaRepository.existsById(mascotaId)) {
-			throw new EntityNotFoundException("Mascota no encontrada.");
-		}
+	public List<VacunaMascotaResponse> findByMascota(Long mascotaId, Long clinicaId) {
+		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
 
 		return vacunaMascotaRepository.findByMascotaIdOrderByFechaAplicacionDesc(mascotaId).stream()
 				.map(this::toResponse)
@@ -168,14 +171,15 @@ public class VacunaService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<VacunaMascotaResponse> findUpcoming(Integer dias) {
+	public List<VacunaMascotaResponse> findUpcoming(Integer dias, Long clinicaId) {
 		int days = dias == null ? 60 : dias;
 		if (days <= 0) {
 			throw new IllegalArgumentException("La cantidad de dias debe ser mayor a cero.");
 		}
 
 		LocalDate today = LocalDate.now();
-		return vacunaMascotaRepository.findByFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(
+		return vacunaMascotaRepository.findByMascotaClinicaIdAndFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(
+						clinicaId,
 						today,
 						today.plusDays(days)
 				).stream()
@@ -184,13 +188,14 @@ public class VacunaService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<VacunaMascotaResponse> findAlerts(Integer dias) {
+	public List<VacunaMascotaResponse> findAlerts(Integer dias, Long clinicaId) {
 		int days = dias == null ? DEFAULT_ALERT_DAYS : dias;
 		if (days <= 0) {
 			throw new IllegalArgumentException("La ventana de alertas debe ser mayor a cero.");
 		}
 
-		return vacunaMascotaRepository.findByFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(
+		return vacunaMascotaRepository.findByMascotaClinicaIdAndFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(
+						clinicaId,
 						LocalDate.now().plusDays(days)
 				).stream()
 				.map(this::toResponse)
@@ -233,6 +238,24 @@ public class VacunaService {
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
 		if (!mascota.getDuenio().getId().equals(duenio.getId())) {
 			throw new AccessDeniedException("No tienes permiso para consultar vacunas de esta mascota.");
+		}
+	}
+
+	private void validateMascotaBelongsToClinic(Mascota mascota, Long clinicaId) {
+		if (mascota.getClinica() == null || !mascota.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La mascota indicada no pertenece a tu clinica.");
+		}
+	}
+
+	private void validateVeterinarioBelongsToClinic(Veterinario veterinario, Long clinicaId) {
+		if (veterinario.getClinica() == null || !veterinario.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El veterinario indicado no pertenece a tu clinica.");
+		}
+	}
+
+	private void validateCitaBelongsToClinic(Cita cita, Long clinicaId) {
+		if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La cita indicada no pertenece a tu clinica.");
 		}
 	}
 
