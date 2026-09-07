@@ -46,18 +46,22 @@ public class CitaService {
 	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
-	public CitaResponse create(CitaRequest request) {
+	public CitaResponse create(CitaRequest request, Long clinicaId) {
 		Duenio duenio = findDuenio(request.duenioId());
 		Mascota mascota = findMascota(request.mascotaId());
 		Veterinario veterinario = findVeterinario(request.veterinarioId());
 		LocalTime horaFin = request.horaInicio().plusMinutes(request.duracionMinutos());
 
+		validateDuenioBelongsToClinic(duenio, clinicaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
+		validateVeterinarioBelongsToClinic(veterinario, clinicaId);
 		validateBaseData(duenio, mascota, veterinario);
 		validateMascotaBelongsToDuenio(mascota, duenio);
 		validateSchedule(request.fecha(), request.horaInicio(), horaFin, request.duracionMinutos(), veterinario.getId(), null);
 
 		LocalDateTime now = LocalDateTime.now();
 		Cita cita = Cita.builder()
+				.clinica(duenio.getClinica())
 				.duenio(duenio)
 				.mascota(mascota)
 				.veterinario(veterinario)
@@ -82,7 +86,8 @@ public class CitaService {
 	@Transactional
 	public CitaResponse createAsDuenio(CitaRequest request, String email) {
 		authenticatedDuenioService.validateOwnDuenio(email, request.duenioId());
-		return create(request);
+		Duenio duenio = findDuenio(request.duenioId());
+		return create(request, duenio.getClinica().getId());
 	}
 
 	@Transactional(readOnly = true)
@@ -91,9 +96,10 @@ public class CitaService {
 			LocalDate fecha,
 			Long duenioId,
 			Long mascotaId,
-			Long veterinarioId
+			Long veterinarioId,
+			Long clinicaId
 	) {
-		return citaRepository.search(estado, fecha, duenioId, mascotaId, veterinarioId).stream()
+		return citaRepository.search(estado, fecha, clinicaId, duenioId, mascotaId, veterinarioId).stream()
 				.map(this::toResponse)
 				.toList();
 	}
@@ -107,12 +113,12 @@ public class CitaService {
 			Long veterinarioId
 	) {
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
-		return findAll(estado, fecha, duenio.getId(), mascotaId, veterinarioId);
+		return findAll(estado, fecha, duenio.getId(), mascotaId, veterinarioId, duenio.getClinica().getId());
 	}
 
 	@Transactional(readOnly = true)
-	public CitaResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public CitaResponse findById(Long id, Long clinicaId) {
+		return toResponse(findEntityById(id, clinicaId));
 	}
 
 	@Transactional(readOnly = true)
@@ -123,8 +129,8 @@ public class CitaService {
 	}
 
 	@Transactional
-	public CitaResponse update(Long id, CitaRequest request) {
-		Cita cita = findEntityById(id);
+	public CitaResponse update(Long id, CitaRequest request, Long clinicaId) {
+		Cita cita = findEntityById(id, clinicaId);
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
 			throw new IllegalArgumentException("No se puede modificar una cita cancelada.");
 		}
@@ -134,11 +140,15 @@ public class CitaService {
 		Veterinario veterinario = findVeterinario(request.veterinarioId());
 		LocalTime horaFin = request.horaInicio().plusMinutes(request.duracionMinutos());
 
+		validateDuenioBelongsToClinic(duenio, clinicaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
+		validateVeterinarioBelongsToClinic(veterinario, clinicaId);
 		validateBaseData(duenio, mascota, veterinario);
 		validateMascotaBelongsToDuenio(mascota, duenio);
 		validateSchedule(request.fecha(), request.horaInicio(), horaFin, request.duracionMinutos(), veterinario.getId(), id);
 
 		cita.setDuenio(duenio);
+		cita.setClinica(duenio.getClinica());
 		cita.setMascota(mascota);
 		cita.setVeterinario(veterinario);
 		cita.setFecha(request.fecha());
@@ -157,8 +167,8 @@ public class CitaService {
 	}
 
 	@Transactional
-	public CitaResponse cancel(Long id) {
-		Cita cita = findEntityById(id);
+	public CitaResponse cancel(Long id, Long clinicaId) {
+		Cita cita = findEntityById(id, clinicaId);
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
 			return toResponse(cita);
 		}
@@ -172,12 +182,23 @@ public class CitaService {
 	public CitaResponse cancelAsDuenio(Long id, String email) {
 		Cita cita = findEntityById(id);
 		validateCitaBelongsToAuthenticatedDuenio(cita, email);
-		return cancel(id);
+		return cancel(id, cita.getClinica().getId());
 	}
 
 	@Transactional
-	public CitaResponse confirm(Long id, String confirmadaPor) {
+	public CitaResponse confirm(Long id, String confirmadaPor, Long clinicaId) {
+		Cita cita = findEntityById(id, clinicaId);
+		return doConfirm(cita, confirmadaPor);
+	}
+
+	@Transactional
+	public CitaResponse confirmAsDuenio(Long id, String email) {
 		Cita cita = findEntityById(id);
+		validateCitaBelongsToAuthenticatedDuenio(cita, email);
+		return doConfirm(cita, email);
+	}
+
+	private CitaResponse doConfirm(Cita cita, String confirmadaPor) {
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
 			throw new IllegalArgumentException("No se puede confirmar una cita cancelada.");
 		}
@@ -196,15 +217,8 @@ public class CitaService {
 		return toResponse(citaRepository.save(cita));
 	}
 
-	@Transactional
-	public CitaResponse confirmAsDuenio(Long id, String email) {
-		Cita cita = findEntityById(id);
-		validateCitaBelongsToAuthenticatedDuenio(cita, email);
-		return confirm(id, email);
-	}
-
 	@Transactional(readOnly = true)
-	public List<CitaResponse> findConfirmationAlerts(Integer horas) {
+	public List<CitaResponse> findConfirmationAlerts(Integer horas, Long clinicaId) {
 		int hoursWindow = horas == null ? 24 : horas;
 		if (hoursWindow <= 0) {
 			throw new IllegalArgumentException("La ventana de alertas debe ser mayor a cero.");
@@ -213,7 +227,8 @@ public class CitaService {
 		LocalDateTime now = LocalDateTime.now();
 		LocalDateTime limit = now.plusHours(hoursWindow);
 
-		return citaRepository.findByEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(EstadoCita.PROGRAMADA)
+		return citaRepository
+				.findByClinicaIdAndEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(clinicaId, EstadoCita.PROGRAMADA)
 				.stream()
 				.filter(cita -> {
 					LocalDateTime scheduledAt = LocalDateTime.of(cita.getFecha(), cita.getHoraInicio());
@@ -252,6 +267,10 @@ public class CitaService {
 	private DetalleCostoCita buildCostDetail(Cita cita, CostoCitaServicioRequest request) {
 		Servicio servicio = servicioRepository.findById(request.servicioId())
 				.orElseThrow(() -> new EntityNotFoundException("Servicio no encontrado."));
+		if (servicio.getClinica() == null || cita.getClinica() == null
+				|| !servicio.getClinica().getId().equals(cita.getClinica().getId())) {
+			throw new AccessDeniedException("El servicio indicado no pertenece a tu clinica.");
+		}
 		if (!servicio.getActive()) {
 			throw new IllegalArgumentException("El servicio " + servicio.getNombre() + " no esta activo.");
 		}
@@ -338,6 +357,12 @@ public class CitaService {
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
 	}
 
+	private Cita findEntityById(Long id, Long clinicaId) {
+		return citaRepository.findById(id)
+				.filter(cita -> cita.getClinica() != null && cita.getClinica().getId().equals(clinicaId))
+				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a esta cita."));
+	}
+
 	private Duenio findDuenio(Long id) {
 		return duenioRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Duenio no encontrado."));
@@ -351,6 +376,24 @@ public class CitaService {
 	private Veterinario findVeterinario(Long id) {
 		return veterinarioRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Veterinario no encontrado."));
+	}
+
+	private void validateDuenioBelongsToClinic(Duenio duenio, Long clinicaId) {
+		if (duenio.getClinica() == null || !duenio.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El duenio indicado no pertenece a tu clinica.");
+		}
+	}
+
+	private void validateMascotaBelongsToClinic(Mascota mascota, Long clinicaId) {
+		if (mascota.getClinica() == null || !mascota.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La mascota indicada no pertenece a tu clinica.");
+		}
+	}
+
+	private void validateVeterinarioBelongsToClinic(Veterinario veterinario, Long clinicaId) {
+		if (veterinario.getClinica() == null || !veterinario.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El veterinario indicado no pertenece a tu clinica.");
+		}
 	}
 
 	private CitaResponse toResponse(Cita cita) {

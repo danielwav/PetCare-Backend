@@ -41,6 +41,9 @@ class CitaServiceTest {
 	private CitaService citaService;
 
 	@Autowired
+	private ClinicaService clinicaService;
+
+	@Autowired
 	private AuthService authService;
 
 	@Autowired
@@ -60,15 +63,15 @@ class CitaServiceTest {
 		TestData data = createBaseData();
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
 
-		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Consulta preventiva"));
-		CitaResponse found = citaService.findById(created.id());
+		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Consulta preventiva"), clinicaId());
+		CitaResponse found = citaService.findById(created.id(), clinicaId());
 		CitaResponse updated = citaService.update(created.id(), baseCitaRequest(
 				data,
 				nextMonday,
 				LocalTime.of(10, 0),
 				"Consulta y vacuna"
-		));
-		CitaResponse canceled = citaService.cancel(created.id());
+		), clinicaId());
+		CitaResponse canceled = citaService.cancel(created.id(), clinicaId());
 
 		assertThat(found.estado()).isEqualTo(EstadoCita.PROGRAMADA);
 		assertThat(found.subtotal()).isEqualByComparingTo("130.00");
@@ -86,14 +89,15 @@ class CitaServiceTest {
 	void searchCitasByFilters() {
 		TestData data = createBaseData();
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
-		citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"));
+		citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"), clinicaId());
 
 		List<CitaResponse> results = citaService.findAll(
 				EstadoCita.PROGRAMADA,
 				nextMonday,
 				data.duenio().id(),
 				data.mascota().id(),
-				data.veterinario().id()
+				data.veterinario().id(),
+				clinicaId()
 		);
 
 		assertThat(results).hasSize(1);
@@ -104,14 +108,14 @@ class CitaServiceTest {
 	void rejectOverlappingAppointment() {
 		TestData data = createBaseData();
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
-		citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"));
+		citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"), clinicaId());
 
 		assertThatThrownBy(() -> citaService.create(baseCitaRequest(
 				data,
 				nextMonday,
 				LocalTime.of(9, 15),
 				"Cita cruzada"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -124,18 +128,18 @@ class CitaServiceTest {
 				nextMonday,
 				LocalTime.of(12, 0),
 				"Fuera de horario"
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
 	void confirmCitaAndRemoveFromConfirmationAlerts() {
 		TestData data = createBaseData();
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
-		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"));
+		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"), clinicaId());
 
-		List<CitaResponse> alertsBefore = citaService.findConfirmationAlerts(24 * 8);
-		CitaResponse confirmed = citaService.confirm(created.id(), "asistente@test.com");
-		List<CitaResponse> alertsAfter = citaService.findConfirmationAlerts(24 * 8);
+		List<CitaResponse> alertsBefore = citaService.findConfirmationAlerts(24 * 8, clinicaId());
+		CitaResponse confirmed = citaService.confirm(created.id(), "asistente@test.com", clinicaId());
+		List<CitaResponse> alertsAfter = citaService.findConfirmationAlerts(24 * 8, clinicaId());
 
 		assertThat(alertsBefore).extracting(CitaResponse::id).contains(created.id());
 		assertThat(confirmed.estado()).isEqualTo(EstadoCita.CONFIRMADA);
@@ -149,10 +153,10 @@ class CitaServiceTest {
 	void rejectConfirmationForCanceledCita() {
 		TestData data = createBaseData();
 		LocalDate nextMonday = nextDate(DayOfWeek.MONDAY);
-		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"));
-		citaService.cancel(created.id());
+		CitaResponse created = citaService.create(baseCitaRequest(data, nextMonday, LocalTime.of(9, 0), "Control general"), clinicaId());
+		citaService.cancel(created.id(), clinicaId());
 
-		assertThatThrownBy(() -> citaService.confirm(created.id(), "asistente@test.com"))
+		assertThatThrownBy(() -> citaService.confirm(created.id(), "asistente@test.com", clinicaId()))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
@@ -172,7 +176,7 @@ class CitaServiceTest {
 				baseCitaRequest(ownerData, nextMonday, LocalTime.of(9, 30), "Control cancelable"),
 				ownerUser.user().email()
 		);
-		CitaResponse otherCita = citaService.create(baseCitaRequest(otherData, nextMonday, LocalTime.of(9, 0), "Control ajeno"));
+		CitaResponse otherCita = citaService.create(baseCitaRequest(otherData, nextMonday, LocalTime.of(9, 0), "Control ajeno"), clinicaId());
 
 		List<CitaResponse> ownCitas = citaService.findAllForDuenio(ownerUser.user().email(), null, nextMonday, null, null);
 		CitaResponse confirmed = citaService.confirmAsDuenio(ownCita.id(), ownerUser.user().email());
@@ -197,6 +201,10 @@ class CitaServiceTest {
 		return createBaseData("12345678", "daniel@test.com", null, "Firulais", "CMVP-001", "ana.vet@test.com", "Consulta general");
 	}
 
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	private TestData createBaseData(
 			String documento,
 			String duenioEmail,
@@ -215,7 +223,7 @@ class CitaServiceTest {
 				"999888777",
 				duenioEmail,
 				"Av. Siempre Viva 123"
-		));
+		), clinicaId());
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				mascotaNombre,
@@ -227,7 +235,7 @@ class CitaServiceTest {
 				new BigDecimal("12.50"),
 				"Sin observaciones",
 				null
-		));
+		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,
 				"Ana",
@@ -242,17 +250,17 @@ class CitaServiceTest {
 						LocalTime.of(11, 0),
 						30
 				))
-		));
+		), clinicaId());
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
 				servicioNombre,
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
-		));
+		), clinicaId());
 		ServicioResponse vacuna = servicioService.create(new ServicioRequest(
 				servicioNombre + " vacuna",
 				"Aplicacion de vacuna antirrabica.",
 				new BigDecimal("80.00")
-		));
+		), clinicaId());
 
 		return new TestData(duenio, mascota, veterinario, consulta, vacuna);
 	}

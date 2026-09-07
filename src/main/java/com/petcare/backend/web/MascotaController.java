@@ -2,6 +2,7 @@ package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.request.MascotaRequest;
 import com.petcare.backend.domain.dto.response.MascotaResponse;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.MascotaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.List;
 public class MascotaController {
 
 	private final MascotaService mascotaService;
+	private final ClinicaService clinicaService;
 
 	@PostMapping("/api/mascotas")
 	@ResponseStatus(HttpStatus.CREATED)
@@ -32,7 +34,7 @@ public class MascotaController {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.createForDuenio(authentication.getName(), request);
 		}
-		return mascotaService.create(request);
+		return mascotaService.create(request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/mascotas")
@@ -45,7 +47,7 @@ public class MascotaController {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.findAllForDuenio(authentication.getName(), search, active);
 		}
-		return mascotaService.findAll(search, duenioId, active);
+		return mascotaService.findAll(search, duenioId, active, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/duenios/{duenioId}/mascotas")
@@ -53,7 +55,7 @@ public class MascotaController {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.findByDuenioForDuenio(authentication.getName(), duenioId);
 		}
-		return mascotaService.findByDuenio(duenioId);
+		return mascotaService.findByDuenio(duenioId, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/mascotas/{id}")
@@ -61,7 +63,7 @@ public class MascotaController {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.findByIdForDuenio(id, authentication.getName());
 		}
-		return mascotaService.findById(id);
+		return mascotaService.findById(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PutMapping("/api/mascotas/{id}")
@@ -69,7 +71,7 @@ public class MascotaController {
 		if (isDuenioOnly(authentication)) {
 			return mascotaService.updateForDuenio(id, request, authentication.getName());
 		}
-		return mascotaService.update(id, request);
+		return mascotaService.update(id, request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@DeleteMapping("/api/mascotas/{id}")
@@ -78,7 +80,7 @@ public class MascotaController {
 		if (isDuenioOnly(authentication)) {
 			mascotaService.deactivateForDuenio(id, authentication.getName());
 		} else {
-			mascotaService.deactivate(id);
+			mascotaService.deactivate(id, clinicaService.resolveClinicaId(authentication.getName()));
 		}
 	}
 

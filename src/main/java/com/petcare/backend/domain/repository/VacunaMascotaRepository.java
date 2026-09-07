@@ -12,7 +12,11 @@ public interface VacunaMascotaRepository extends JpaRepository<VacunaMascota, Lo
 
 	List<VacunaMascota> findByFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(LocalDate start, LocalDate end);
 
+	List<VacunaMascota> findByMascotaClinicaIdAndFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(Long clinicaId, LocalDate start, LocalDate end);
+
 	List<VacunaMascota> findByFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(LocalDate end);
+
+	List<VacunaMascota> findByMascotaClinicaIdAndFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(Long clinicaId, LocalDate end);
 
 	List<VacunaMascota> findByMascotaDuenioIdAndFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(Long duenioId, LocalDate end);
 }

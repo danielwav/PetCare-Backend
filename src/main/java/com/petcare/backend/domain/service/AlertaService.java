@@ -29,14 +29,14 @@ public class AlertaService {
 	private final MascotaRepository mascotaRepository;
 
 	@Transactional(readOnly = true)
-	public PanelAlertasDiaResponse getDailyPanel(LocalDate fecha, Integer diasVacunas) {
+	public PanelAlertasDiaResponse getDailyPanel(LocalDate fecha, Integer diasVacunas, Long clinicaId) {
 		LocalDate panelDate = fecha == null ? LocalDate.now() : fecha;
 		int vaccineAlertDays = diasVacunas == null ? DEFAULT_VACCINE_ALERT_DAYS : diasVacunas;
 		if (vaccineAlertDays <= 0) {
 			throw new IllegalArgumentException("La ventana de alertas de vacunas debe ser mayor a cero.");
 		}
 
-		List<Cita> citasDelDia = citaRepository.search(null, panelDate, null, null, null);
+		List<Cita> citasDelDia = citaRepository.search(null, panelDate, clinicaId, null, null, null);
 		List<AlertaCitaResponse> citasProgramadasHoy = citasDelDia.stream()
 				.filter(cita -> cita.getEstado() == EstadoCita.PROGRAMADA || cita.getEstado() == EstadoCita.CONFIRMADA)
 				.map(this::toCitaAlert)
@@ -57,7 +57,7 @@ public class AlertaService {
 
 		LocalDate today = LocalDate.now();
 		List<VacunaMascota> vaccineAlerts = vacunaMascotaRepository
-				.findByFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(today.plusDays(vaccineAlertDays));
+				.findByMascotaClinicaIdAndFechaProximaDosisLessThanEqualOrderByFechaProximaDosisAsc(clinicaId, today.plusDays(vaccineAlertDays));
 		List<AlertaVacunaResponse> vacunasProximas = vaccineAlerts.stream()
 				.filter(vacunaMascota -> vacunaMascota.getFechaProximaDosis() != null)
 				.filter(vacunaMascota -> !vacunaMascota.getFechaProximaDosis().isBefore(today))
@@ -70,7 +70,7 @@ public class AlertaService {
 				.toList();
 
 		List<ControlMensualPendienteResponse> controlesPendientes = mascotaRepository
-				.findActivePetsWithoutMonthlyControl(panelDate.getYear(), panelDate.getMonthValue())
+				.findActivePetsWithoutMonthlyControl(clinicaId, panelDate.getYear(), panelDate.getMonthValue())
 				.stream()
 				.map(mascota -> toControlPending(mascota, panelDate))
 				.toList();

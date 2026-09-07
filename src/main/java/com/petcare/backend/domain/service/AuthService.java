@@ -7,6 +7,7 @@ import com.petcare.backend.domain.dto.request.RegisterClinicRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
+import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.DuenioRepository;
 import com.petcare.backend.domain.repository.RolRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
@@ -44,6 +45,7 @@ public class AuthService {
 	private final RolRepository rolRepository;
 	private final UsuarioRepository usuarioRepository;
 	private final DuenioRepository duenioRepository;
+	private final ClinicaRepository clinicaRepository;
 	private final JwtProperties jwtProperties;
 	private final EmailService emailService;
 	private final ClinicaService clinicaService;
@@ -136,7 +138,7 @@ public class AuthService {
 	}
 
 	@Transactional
-	public String createInternalUser(CreateInternalUserRequest request) {
+	public String createInternalUser(CreateInternalUserRequest request, Long clinicaId) {
 		String email = request.email().toLowerCase();
 		if (usuarioRepository.existsByEmail(email)) {
 			throw new IllegalArgumentException("El correo ya esta registrado.");
@@ -157,6 +159,9 @@ public class AuthService {
 		Rol role = rolRepository.findByName(roleName)
 				.orElseThrow(() -> new IllegalStateException("Rol no encontrado: " + roleName));
 
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
+
 		String token = UUID.randomUUID().toString();
 		String fullName = request.nombres() + " " + request.apellidos();
 
@@ -169,6 +174,7 @@ public class AuthService {
 				.tokenExpiry(LocalDateTime.now().plusDays(7))
 				.createdAt(LocalDateTime.now())
 				.roles(Set.of(role))
+				.clinica(clinica)
 				.build();
 
 		usuarioRepository.save(usuario);

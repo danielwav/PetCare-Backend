@@ -9,6 +9,7 @@ import com.petcare.backend.persistence.entity.Inasistencia;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +26,12 @@ public class InasistenciaService {
 	private final CitaRepository citaRepository;
 
 	@Transactional
-	public InasistenciaResponse register(Long citaId, InasistenciaRequest request, String registradoPor) {
+	public InasistenciaResponse register(Long citaId, InasistenciaRequest request, String registradoPor, Long clinicaId) {
 		Cita cita = citaRepository.findById(citaId)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
+		if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("No tienes permiso para acceder a esta cita.");
+		}
 
 		validateCanRegisterNoShow(cita);
 		if (inasistenciaRepository.existsByCitaId(citaId)) {
@@ -52,7 +56,7 @@ public class InasistenciaService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<InasistenciaResponse> findAll(Long duenioId, LocalDate fechaInicio, LocalDate fechaFin) {
+	public List<InasistenciaResponse> findAll(Long duenioId, LocalDate fechaInicio, LocalDate fechaFin, Long clinicaId) {
 		LocalDateTime start = fechaInicio == null ? null : fechaInicio.atStartOfDay();
 		LocalDateTime end = fechaFin == null ? null : fechaFin.atTime(LocalTime.MAX);
 
@@ -60,15 +64,20 @@ public class InasistenciaService {
 			throw new IllegalArgumentException("La fecha final no puede ser anterior a la fecha inicial.");
 		}
 
-		return inasistenciaRepository.search(duenioId, start, end).stream()
+		return inasistenciaRepository.search(clinicaId, duenioId, start, end).stream()
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public InasistenciaResponse findById(Long id) {
-		return toResponse(inasistenciaRepository.findById(id)
-				.orElseThrow(() -> new EntityNotFoundException("Inasistencia no encontrada.")));
+	public InasistenciaResponse findById(Long id, Long clinicaId) {
+		Inasistencia inasistencia = inasistenciaRepository.findById(id)
+				.orElseThrow(() -> new EntityNotFoundException("Inasistencia no encontrada."));
+		Cita cita = inasistencia.getCita();
+		if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("No tienes permiso para acceder a esta inasistencia.");
+		}
+		return toResponse(inasistencia);
 	}
 
 	private void validateCanRegisterNoShow(Cita cita) {

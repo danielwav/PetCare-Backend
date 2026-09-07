@@ -4,6 +4,7 @@ import com.petcare.backend.domain.dto.request.VacunaMascotaRequest;
 import com.petcare.backend.domain.dto.request.VacunaRequest;
 import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.dto.response.VacunaResponse;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.VacunaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import java.util.List;
 public class VacunaController {
 
 	private final VacunaService vacunaService;
+	private final ClinicaService clinicaService;
 
 	@PostMapping("/api/vacunas")
 	@ResponseStatus(HttpStatus.CREATED)
@@ -70,7 +72,7 @@ public class VacunaController {
 			@Valid @RequestBody VacunaMascotaRequest request,
 			Authentication authentication
 	) {
-		return vacunaService.registerForMascota(id, request, authentication.getName());
+		return vacunaService.registerForMascota(id, request, authentication.getName(), clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/mascotas/{id}/vacunas")
@@ -78,12 +80,12 @@ public class VacunaController {
 		if (isDuenioOnly(authentication)) {
 			return vacunaService.findByMascotaForDuenio(id, authentication.getName());
 		}
-		return vacunaService.findByMascota(id);
+		return vacunaService.findByMascota(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/vacunas/proximas")
-	public List<VacunaMascotaResponse> findUpcoming(@RequestParam(required = false) Integer dias) {
-		return vacunaService.findUpcoming(dias);
+	public List<VacunaMascotaResponse> findUpcoming(@RequestParam(required = false) Integer dias, Authentication authentication) {
+		return vacunaService.findUpcoming(dias, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/alertas/vacunas")
@@ -91,7 +93,7 @@ public class VacunaController {
 		if (isDuenioOnly(authentication)) {
 			return vacunaService.findAlertsForDuenio(dias, authentication.getName());
 		}
-		return vacunaService.findAlerts(dias);
+		return vacunaService.findAlerts(dias, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	private boolean isDuenioOnly(Authentication authentication) {

@@ -41,6 +41,10 @@ public class Mascota {
 	@JoinColumn(name = "duenio_id", nullable = false)
 	private Duenio duenio;
 
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "clinica_id")
+	private Clinica clinica;
+
 	@Column(nullable = false, length = 80)
 	private String nombre;
 

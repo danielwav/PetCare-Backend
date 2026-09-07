@@ -11,17 +11,20 @@ import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.repository.CitaRepository;
 import com.petcare.backend.domain.repository.DetalleCostoCitaRepository;
 import com.petcare.backend.domain.repository.InasistenciaRepository;
+import com.petcare.backend.domain.repository.MascotaRepository;
 import com.petcare.backend.domain.repository.ServicioRepository;
 import com.petcare.backend.domain.repository.VacunaMascotaRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.DetalleCostoCita;
 import com.petcare.backend.persistence.entity.Inasistencia;
+import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Servicio;
 import com.petcare.backend.persistence.entity.VacunaMascota;
 import com.petcare.backend.persistence.entity.Veterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,7 @@ public class ReporteService {
 	private final InasistenciaRepository inasistenciaRepository;
 	private final VacunaMascotaRepository vacunaMascotaRepository;
 	private final ServicioRepository servicioRepository;
+	private final MascotaRepository mascotaRepository;
 	private final AtencionClinicaService atencionClinicaService;
 
 	@Transactional(readOnly = true)
@@ -55,41 +59,45 @@ public class ReporteService {
 			LocalDate fechaFin,
 			Long veterinarioId,
 			Long mascotaId,
-			Long duenioId
+			Long duenioId,
+			Long clinicaId
 	) {
 		validateDateRange(fechaInicio, fechaFin);
-		return citaRepository.searchByDateRange(estado, fechaInicio, fechaFin, duenioId, mascotaId, veterinarioId)
+		return citaRepository.searchByDateRange(estado, fechaInicio, fechaFin, clinicaId, duenioId, mascotaId, veterinarioId)
 				.stream()
 				.map(this::toCitaReport)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public List<InasistenciaResponse> findInasistencias(Long duenioId, LocalDate fechaInicio, LocalDate fechaFin) {
+	public List<InasistenciaResponse> findInasistencias(Long duenioId, LocalDate fechaInicio, LocalDate fechaFin, Long clinicaId) {
 		validateDateRange(fechaInicio, fechaFin);
 		LocalDateTime start = fechaInicio == null ? null : fechaInicio.atStartOfDay();
 		LocalDateTime end = fechaFin == null ? null : fechaFin.atTime(LocalTime.MAX);
 
-		return inasistenciaRepository.search(duenioId, start, end).stream()
+		return inasistenciaRepository.search(clinicaId, duenioId, start, end).stream()
 				.map(this::toInasistenciaResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public List<VacunaMascotaResponse> findVacunasProximas(LocalDate fechaInicio, LocalDate fechaFin) {
+	public List<VacunaMascotaResponse> findVacunasProximas(LocalDate fechaInicio, LocalDate fechaFin, Long clinicaId) {
 		LocalDate start = fechaInicio == null ? LocalDate.now() : fechaInicio;
 		LocalDate end = fechaFin == null ? start.plusDays(DEFAULT_UPCOMING_VACCINE_DAYS) : fechaFin;
 		validateDateRange(start, end);
 
-		return vacunaMascotaRepository.findByFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(start, end).stream()
+		return vacunaMascotaRepository.findByMascotaClinicaIdAndFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(clinicaId, start, end).stream()
 				.map(this::toVacunaMascotaResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public ReporteCostoCitaResponse findCostoCita(Long citaId) {
+	public ReporteCostoCitaResponse findCostoCita(Long citaId, Long clinicaId) {
 		Cita cita = citaRepository.findById(citaId)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
+		if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("No tienes permiso para acceder a esta cita.");
+		}
 		List<DetalleCostoCitaResponse> detalles = cita.getDetallesCosto().stream()
 				.map(this::toDetalleCostoResponse)
 				.toList();
@@ -104,9 +112,9 @@ public class ReporteService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<ServicioSolicitadoResponse> findServiciosMasSolicitados(LocalDate fechaInicio, LocalDate fechaFin) {
+	public List<ServicioSolicitadoResponse> findServiciosMasSolicitados(LocalDate fechaInicio, LocalDate fechaFin, Long clinicaId) {
 		validateDateRange(fechaInicio, fechaFin);
-		return detalleCostoCitaRepository.findMostRequestedServices(fechaInicio, fechaFin).stream()
+		return detalleCostoCitaRepository.findMostRequestedServices(clinicaId, fechaInicio, fechaFin).stream()
 				.map(row -> new ServicioSolicitadoResponse(
 						(String) row[0],
 						((Number) row[1]).longValue(),
@@ -116,8 +124,8 @@ public class ReporteService {
 	}
 
 	@Transactional(readOnly = true)
-	public ReporteServicioResponse findReporteServicios() {
-		List<Servicio> todos = servicioRepository.findAll();
+	public ReporteServicioResponse findReporteServicios(Long clinicaId) {
+		List<Servicio> todos = servicioRepository.findAllByClinicaIdOrderByNombreAsc(clinicaId);
 		long activos = todos.stream().filter(Servicio::getActive).count();
 		long inactivos = todos.size() - activos;
 
@@ -125,8 +133,8 @@ public class ReporteService {
 		LocalDate inicioMes = now.withDayOfMonth(1);
 		LocalDate inicioAnio = now.withDayOfMonth(1).withMonth(1);
 
-		List<Object[]> detalleMes = detalleCostoCitaRepository.findMostRequestedServices(inicioMes, now);
-		List<Object[]> detalleAnio = detalleCostoCitaRepository.findMostRequestedServices(inicioAnio, now);
+		List<Object[]> detalleMes = detalleCostoCitaRepository.findMostRequestedServices(clinicaId, inicioMes, now);
+		List<Object[]> detalleAnio = detalleCostoCitaRepository.findMostRequestedServices(clinicaId, inicioAnio, now);
 
 		BigDecimal ingresosMes = detalleMes.stream().map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
 		BigDecimal ingresosAnioValue = detalleAnio.stream().map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -140,12 +148,12 @@ public class ReporteService {
 				.map(e -> new ReporteServicioResponse.CategoriaCount(e.getKey(), e.getValue().intValue()))
 				.toList();
 
-		List<ServicioSolicitadoResponse> top = findServiciosMasSolicitados(inicioAnio, now);
+		List<ServicioSolicitadoResponse> top = findServiciosMasSolicitados(inicioAnio, now, clinicaId);
 		if (!top.isEmpty()) servicioMasSolicitado = top.getFirst().nombreServicio();
 
 		List<ReporteServicioResponse.IngresoPorServicio> ingresos = top.stream()
 				.map(s -> {
-					Servicio serv = servicioRepository.findByNombreIgnoreCase(s.nombreServicio()).orElse(null);
+					Servicio serv = servicioRepository.findByClinicaIdAndNombreIgnoreCase(clinicaId, s.nombreServicio()).orElse(null);
 					return new ReporteServicioResponse.IngresoPorServicio(
 							s.nombreServicio(), serv != null ? serv.getCostoBase() : BigDecimal.ZERO,
 							s.cantidadSolicitada(), s.totalGenerado()
@@ -158,7 +166,7 @@ public class ReporteService {
 			LocalDate start = inicioAnio.plusMonths(i);
 			LocalDate end = start.plusMonths(1).minusDays(1);
 			LocalDate fin = end.isAfter(now) ? now : end;
-			List<Object[]> datos = detalleCostoCitaRepository.findMostRequestedServices(start, fin);
+			List<Object[]> datos = detalleCostoCitaRepository.findMostRequestedServices(clinicaId, start, fin);
 			long cant = datos.stream().mapToLong(r -> ((Number) r[1]).longValue()).sum();
 			String mes = start.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.forLanguageTag("es"));
 			tendencia.add(new ReporteServicioResponse.TendenciaMensual(mes, start.getYear(), cant));
@@ -173,7 +181,12 @@ public class ReporteService {
 	}
 
 	@Transactional(readOnly = true)
-	public HistoriaClinicaResponse findHistoriaClinica(Long mascotaId) {
+	public HistoriaClinicaResponse findHistoriaClinica(Long mascotaId, Long clinicaId) {
+		Mascota mascota = mascotaRepository.findById(mascotaId)
+				.orElseThrow(() -> new EntityNotFoundException("Mascota no encontrada."));
+		if (mascota.getClinica() == null || !mascota.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("No tienes permiso para acceder a esta mascota.");
+		}
 		return atencionClinicaService.findHistoriaClinicaByMascota(mascotaId);
 	}
 

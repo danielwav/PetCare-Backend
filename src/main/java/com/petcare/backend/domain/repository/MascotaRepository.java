@@ -11,8 +11,9 @@ public interface MascotaRepository extends JpaRepository<Mascota, Long> {
 
 	List<Mascota> findByDuenioIdOrderByNombreAsc(Long duenioId);
 
-	@Query(value = "select m.* from mascotas m join duenios d on d.id = m.duenio_id where (:active is null or m.active = :active) and (:duenioId is null or d.id = :duenioId) and (:search is null or upper(m.nombre) like upper('%' || :search || '%') or upper(m.especie) like upper('%' || :search || '%') or upper(m.raza) like upper('%' || :search || '%') or upper(d.nombres) like upper('%' || :search || '%') or upper(d.apellidos) like upper('%' || :search || '%')) order by m.nombre asc", nativeQuery = true)
+	@Query(value = "select m.* from mascotas m join duenios d on d.id = m.duenio_id where (:clinicaId is null or m.clinica_id = :clinicaId) and (:active is null or m.active = :active) and (:duenioId is null or d.id = :duenioId) and (:search is null or upper(m.nombre) like upper('%' || :search || '%') or upper(m.especie) like upper('%' || :search || '%') or upper(m.raza) like upper('%' || :search || '%') or upper(d.nombres) like upper('%' || :search || '%') or upper(d.apellidos) like upper('%' || :search || '%')) order by m.nombre asc", nativeQuery = true)
 	List<Mascota> search(
+			@Param("clinicaId") Long clinicaId,
 			@Param("search") String search,
 			@Param("duenioId") Long duenioId,
 			@Param("active") Boolean active
@@ -22,6 +23,7 @@ public interface MascotaRepository extends JpaRepository<Mascota, Long> {
 			select m from Mascota m
 			join fetch m.duenio d
 			where m.active = true
+			and (:clinicaId is null or m.clinica.id = :clinicaId)
 			and not exists (
 				select c from ControlMensualMascota c
 				where c.mascota = m
@@ -31,6 +33,7 @@ public interface MascotaRepository extends JpaRepository<Mascota, Long> {
 			order by m.nombre asc
 			""")
 	List<Mascota> findActivePetsWithoutMonthlyControl(
+			@Param("clinicaId") Long clinicaId,
 			@Param("anio") Integer anio,
 			@Param("mes") Integer mes
 	);

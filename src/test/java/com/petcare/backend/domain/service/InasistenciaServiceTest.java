@@ -42,6 +42,9 @@ class InasistenciaServiceTest {
 	private InasistenciaService inasistenciaService;
 
 	@Autowired
+	private ClinicaService clinicaService;
+
+	@Autowired
 	private CitaService citaService;
 
 	@Autowired
@@ -62,19 +65,21 @@ class InasistenciaServiceTest {
 	@Test
 	void registerNoShowAndSearchByDuenioAndDateRange() {
 		TestData data = createBaseData();
-		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 		moveCitaToPast(cita.id());
 
 		InasistenciaResponse registered = inasistenciaService.register(
 				cita.id(),
 				new InasistenciaRequest("El duenio no se presento a la cita."),
-				"asistente@test.com"
+				"asistente@test.com",
+				clinicaId()
 		);
-		CitaResponse updatedCita = citaService.findById(cita.id());
+		CitaResponse updatedCita = citaService.findById(cita.id(), clinicaId());
 		List<InasistenciaResponse> results = inasistenciaService.findAll(
 				data.duenio().id(),
 				LocalDate.now().minusDays(2),
-				LocalDate.now()
+				LocalDate.now(),
+				clinicaId()
 		);
 
 		assertThat(registered.citaId()).isEqualTo(cita.id());
@@ -89,31 +94,38 @@ class InasistenciaServiceTest {
 	@Test
 	void rejectDuplicateNoShowForSameCita() {
 		TestData data = createBaseData();
-		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 		moveCitaToPast(cita.id());
 		inasistenciaService.register(
 				cita.id(),
 				new InasistenciaRequest("Primera marca de inasistencia."),
-				"asistente@test.com"
+				"asistente@test.com",
+				clinicaId()
 		);
 
 		assertThatThrownBy(() -> inasistenciaService.register(
 				cita.id(),
 				new InasistenciaRequest("Registro duplicado."),
-				"asistente@test.com"
+				"asistente@test.com",
+				clinicaId()
 		)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
 	void rejectNoShowBeforeAppointmentTime() {
 		TestData data = createBaseData();
-		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 
 		assertThatThrownBy(() -> inasistenciaService.register(
 				cita.id(),
 				new InasistenciaRequest("Aun no llega la hora de la cita."),
-				"asistente@test.com"
+				"asistente@test.com",
+				clinicaId()
 		)).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
 	}
 
 	private TestData createBaseData() {
@@ -126,7 +138,7 @@ class InasistenciaServiceTest {
 				"999888777",
 				"daniel@test.com",
 				"Av. Siempre Viva 123"
-		));
+		), clinicaId());
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				"Firulais",
@@ -138,7 +150,7 @@ class InasistenciaServiceTest {
 				new BigDecimal("12.50"),
 				"Sin observaciones",
 				null
-		));
+		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,
 				"Ana",
@@ -153,12 +165,12 @@ class InasistenciaServiceTest {
 						LocalTime.of(11, 0),
 						30
 				))
-		));
+		), clinicaId());
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
 				"Consulta general",
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
-		));
+		), clinicaId());
 
 		return new TestData(duenio, mascota, veterinario, consulta);
 	}

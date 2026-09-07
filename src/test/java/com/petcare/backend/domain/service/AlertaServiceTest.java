@@ -43,6 +43,9 @@ class AlertaServiceTest {
 	private AlertaService alertaService;
 
 	@Autowired
+	private ClinicaService clinicaService;
+
+	@Autowired
 	private CitaService citaService;
 
 	@Autowired
@@ -66,15 +69,15 @@ class AlertaServiceTest {
 	@Test
 	void buildDailyPanelWithAppointmentsVaccinesAndMonthlyControls() {
 		TestData data = createBaseData();
-		CitaResponse scheduled = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY), LocalTime.of(9, 0)));
-		CitaResponse confirmed = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY), LocalTime.of(9, 30)));
-		CitaResponse noShow = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY), LocalTime.of(10, 0)));
+		CitaResponse scheduled = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY), LocalTime.of(9, 0)), clinicaId());
+		CitaResponse confirmed = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY), LocalTime.of(9, 30)), clinicaId());
+		CitaResponse noShow = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY), LocalTime.of(10, 0)), clinicaId());
 		moveCitaToToday(scheduled.id(), EstadoCita.PROGRAMADA, true);
 		moveCitaToToday(confirmed.id(), EstadoCita.CONFIRMADA, false);
 		moveCitaToToday(noShow.id(), EstadoCita.NO_ASISTIO, false);
 		createVaccineAlerts(data);
 
-		PanelAlertasDiaResponse panel = alertaService.getDailyPanel(LocalDate.now(), 30);
+		PanelAlertasDiaResponse panel = alertaService.getDailyPanel(LocalDate.now(), 30, clinicaId());
 
 		assertThat(panel.totalCitasProgramadasHoy()).isEqualTo(2);
 		assertThat(panel.totalCitasSinConfirmar()).isEqualTo(1);
@@ -109,7 +112,7 @@ class AlertaServiceTest {
 				null,
 				LocalDate.now().plusDays(15),
 				"Proxima dosis dentro de la ventana."
-		));
+		), data.veterinario().id(), clinicaId());
 		vacunaService.registerForMascota(data.mascota().id(), new VacunaMascotaRequest(
 				moquillo.id(),
 				data.veterinario().id(),
@@ -118,7 +121,11 @@ class AlertaServiceTest {
 				null,
 				LocalDate.now().minusDays(10),
 				"Dosis vencida."
-		));
+		), data.veterinario().id(), clinicaId());
+	}
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
 	}
 
 	private TestData createBaseData() {
@@ -131,7 +138,7 @@ class AlertaServiceTest {
 				"999888777",
 				"daniel@test.com",
 				"Av. Siempre Viva 123"
-		));
+		), clinicaId());
 		MascotaResponse mascota = mascotaService.create(new MascotaRequest(
 				duenio.id(),
 				"Firulais",
@@ -143,7 +150,7 @@ class AlertaServiceTest {
 				new BigDecimal("12.50"),
 				"Sin observaciones",
 				null
-		));
+		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
 				null,
 				"Ana",
@@ -158,12 +165,12 @@ class AlertaServiceTest {
 						LocalTime.of(11, 0),
 						30
 				))
-		));
+		), clinicaId());
 		ServicioResponse consulta = servicioService.create(new ServicioRequest(
 				"Consulta general",
 				"Evaluacion clinica basica.",
 				new BigDecimal("50.00")
-		));
+		), clinicaId());
 
 		return new TestData(duenio, mascota, veterinario, consulta);
 	}

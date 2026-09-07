@@ -30,12 +30,21 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers(
-								"/api/auth/**",
 								"/api/activate-account",
 								"/api/health",
 								"/swagger-ui.html",
 								"/swagger-ui/**",
 								"/v3/api-docs/**"
+						).permitAll()
+
+						.requestMatchers(
+								"/api/auth/register",
+								"/api/auth/register-clinic",
+								"/api/auth/login",
+								"/api/auth/refresh",
+								"/api/auth/set-password",
+								"/api/auth/activate-account",
+								"/api/auth/activate/**"
 						).permitAll()
 
 						.requestMatchers(HttpMethod.GET, "/api/usuarios/**")
@@ -47,7 +56,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/clinicas/me")
 						.hasAuthority("ROLE_ADMIN")
 
-						.anyRequest().permitAll())
+						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
 	}

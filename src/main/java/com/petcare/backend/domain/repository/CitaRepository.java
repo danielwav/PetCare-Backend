@@ -19,6 +19,7 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			join fetch c.veterinario v
 			where (cast(:estado as string) is null or c.estado = :estado)
 			and (cast(:fecha as date) is null or c.fecha = :fecha)
+			and (cast(:clinicaId as long) is null or c.clinica.id = :clinicaId)
 			and (cast(:duenioId as long) is null or d.id = :duenioId)
 			and (cast(:mascotaId as long) is null or m.id = :mascotaId)
 			and (cast(:veterinarioId as long) is null or v.id = :veterinarioId)
@@ -27,6 +28,7 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 	List<Cita> search(
 			@Param("estado") EstadoCita estado,
 			@Param("fecha") LocalDate fecha,
+			@Param("clinicaId") Long clinicaId,
 			@Param("duenioId") Long duenioId,
 			@Param("mascotaId") Long mascotaId,
 			@Param("veterinarioId") Long veterinarioId
@@ -40,6 +42,7 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			where (cast(:estado as string) is null or c.estado = :estado)
 			and (cast(:fechaInicio as date) is null or c.fecha >= :fechaInicio)
 			and (cast(:fechaFin as date) is null or c.fecha <= :fechaFin)
+			and (cast(:clinicaId as long) is null or c.clinica.id = :clinicaId)
 			and (cast(:duenioId as long) is null or d.id = :duenioId)
 			and (cast(:mascotaId as long) is null or m.id = :mascotaId)
 			and (cast(:veterinarioId as long) is null or v.id = :veterinarioId)
@@ -49,6 +52,7 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 			@Param("estado") EstadoCita estado,
 			@Param("fechaInicio") LocalDate fechaInicio,
 			@Param("fechaFin") LocalDate fechaFin,
+			@Param("clinicaId") Long clinicaId,
 			@Param("duenioId") Long duenioId,
 			@Param("mascotaId") Long mascotaId,
 			@Param("veterinarioId") Long veterinarioId
@@ -72,6 +76,8 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 	);
 
 	List<Cita> findByEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(EstadoCita estado);
+
+	List<Cita> findByClinicaIdAndEstadoAndRequiereConfirmacionTrueOrderByFechaAscHoraInicioAsc(Long clinicaId, EstadoCita estado);
 
 	List<Cita> findByMascotaIdAndFechaGreaterThanEqualAndEstadoIn(Long mascotaId, LocalDate fecha, List<EstadoCita> estados);
 }

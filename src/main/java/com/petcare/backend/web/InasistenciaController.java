@@ -2,6 +2,7 @@ package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.request.InasistenciaRequest;
 import com.petcare.backend.domain.dto.response.InasistenciaResponse;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.InasistenciaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.util.List;
 public class InasistenciaController {
 
 	private final InasistenciaService inasistenciaService;
+	private final ClinicaService clinicaService;
 
 	@PatchMapping("/api/citas/{id}/inasistencia")
 	public InasistenciaResponse register(
@@ -30,20 +32,21 @@ public class InasistenciaController {
 			Authentication authentication
 	) {
 		String registeredBy = authentication == null ? "sistema" : authentication.getName();
-		return inasistenciaService.register(id, request, registeredBy);
+		return inasistenciaService.register(id, request, registeredBy, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/inasistencias")
 	public List<InasistenciaResponse> findAll(
 			@RequestParam(required = false) Long duenioId,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			Authentication authentication
 	) {
-		return inasistenciaService.findAll(duenioId, fechaInicio, fechaFin);
+		return inasistenciaService.findAll(duenioId, fechaInicio, fechaFin, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/inasistencias/{id}")
-	public InasistenciaResponse findById(@PathVariable Long id) {
-		return inasistenciaService.findById(id);
+	public InasistenciaResponse findById(@PathVariable Long id, Authentication authentication) {
+		return inasistenciaService.findById(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 }

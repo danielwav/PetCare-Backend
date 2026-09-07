@@ -2,6 +2,7 @@ package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.response.DuenioResponse;
+import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.DuenioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,11 +27,12 @@ import java.util.List;
 public class DuenioController {
 
 	private final DuenioService duenioService;
+	private final ClinicaService clinicaService;
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public DuenioResponse create(@Valid @RequestBody DuenioRequest request) {
-		return duenioService.create(request);
+	public DuenioResponse create(@Valid @RequestBody DuenioRequest request, Authentication authentication) {
+		return duenioService.create(request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping
@@ -42,7 +44,7 @@ public class DuenioController {
 		if (isDuenioOnly(authentication)) {
 			return List.of(duenioService.findOwn(authentication.getName()));
 		}
-		return duenioService.findAll(search, active);
+		return duenioService.findAll(search, active, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/me")
@@ -55,7 +57,7 @@ public class DuenioController {
 		if (isDuenioOnly(authentication)) {
 			return duenioService.findOwnById(id, authentication.getName());
 		}
-		return duenioService.findById(id);
+		return duenioService.findById(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PutMapping("/{id}")
@@ -63,13 +65,13 @@ public class DuenioController {
 		if (isDuenioOnly(authentication)) {
 			return duenioService.updateOwn(id, request, authentication.getName());
 		}
-		return duenioService.update(id, request);
+		return duenioService.update(id, request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void deactivate(@PathVariable Long id) {
-		duenioService.deactivate(id);
+	public void deactivate(@PathVariable Long id, Authentication authentication) {
+		duenioService.deactivate(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	private boolean isDuenioOnly(Authentication authentication) {

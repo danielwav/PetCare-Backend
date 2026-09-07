@@ -3,14 +3,17 @@ package com.petcare.backend.domain.service;
 import com.petcare.backend.domain.dto.request.AsistenteRequest;
 import com.petcare.backend.domain.dto.response.AsistenteResponse;
 import com.petcare.backend.domain.repository.AsistenteRepository;
+import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.RolRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.entity.Asistente;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,19 +29,25 @@ public class AsistenteService {
 	private final AsistenteRepository asistenteRepository;
 	private final UsuarioRepository usuarioRepository;
 	private final RolRepository rolRepository;
+	private final ClinicaRepository clinicaRepository;
 	private final PasswordEncoder passwordEncoder;
 
 	@Transactional
-	public AsistenteResponse create(AsistenteRequest request) {
+	public AsistenteResponse create(AsistenteRequest request, Long clinicaId) {
 		validateUniqueDocument(request.numeroDocumento(), null);
 
-		Usuario usuario = resolveUsuarioForCreate(request);
+		Usuario usuario = resolveUsuarioForCreate(request, clinicaId);
+		validateUsuarioBelongsToClinic(usuario, clinicaId);
 		validateUsuarioAvailable(usuario, null);
 		ensureAsistenteRole(usuario);
 		usuario = usuarioRepository.save(usuario);
 
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
+
 		LocalDateTime now = LocalDateTime.now();
 		Asistente asistente = Asistente.builder()
+				.clinica(clinica)
 				.usuario(usuario)
 				.nombres(coalesce(request.nombres(), usuario.getFullName()))
 				.apellidos("")
@@ -56,25 +65,26 @@ public class AsistenteService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<AsistenteResponse> findAll(String search, Boolean active) {
+	public List<AsistenteResponse> findAll(String search, Boolean active, Long clinicaId) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
-		return asistenteRepository.search(normalizedSearch, active).stream()
+		return asistenteRepository.search(clinicaId, normalizedSearch, active).stream()
 				.filter(a -> a.getUsuario() != null)
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public AsistenteResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public AsistenteResponse findById(Long id, Long clinicaId) {
+		return toResponse(findEntityById(id, clinicaId));
 	}
 
 	@Transactional
-	public AsistenteResponse update(Long id, AsistenteRequest request) {
-		Asistente asistente = findEntityById(id);
+	public AsistenteResponse update(Long id, AsistenteRequest request, Long clinicaId) {
+		Asistente asistente = findEntityById(id, clinicaId);
 		validateUniqueDocument(request.numeroDocumento(), id);
 
-		Usuario usuario = resolveUsuarioForUpdate(request, asistente);
+		Usuario usuario = resolveUsuarioForUpdate(request, asistente, clinicaId);
+		validateUsuarioBelongsToClinic(usuario, clinicaId);
 		validateUsuarioAvailable(usuario, id);
 		ensureAsistenteRole(usuario);
 		usuario = usuarioRepository.save(usuario);
@@ -93,8 +103,8 @@ public class AsistenteService {
 	}
 
 	@Transactional
-	public AsistenteResponse activate(Long id) {
-		Asistente asistente = findEntityById(id);
+	public AsistenteResponse activate(Long id, Long clinicaId) {
+		Asistente asistente = findEntityById(id, clinicaId);
 		asistente.setActive(true);
 		asistente.setUpdatedAt(LocalDateTime.now());
 		if (asistente.getUsuario() != null) {
@@ -104,8 +114,8 @@ public class AsistenteService {
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
-		Asistente asistente = findEntityById(id);
+	public void deactivate(Long id, Long clinicaId) {
+		Asistente asistente = findEntityById(id, clinicaId);
 		asistente.setActive(false);
 		asistente.setUpdatedAt(LocalDateTime.now());
 		if (asistente.getUsuario() != null) {
@@ -114,7 +124,7 @@ public class AsistenteService {
 		asistenteRepository.save(asistente);
 	}
 
-	private Usuario resolveUsuarioForCreate(AsistenteRequest request) {
+	private Usuario resolveUsuarioForCreate(AsistenteRequest request, Long clinicaId) {
 		if (request.usuarioId() != null) {
 			return findUsuario(request.usuarioId());
 		}
@@ -125,6 +135,8 @@ public class AsistenteService {
 		if (usuarioRepository.existsByEmail(email)) {
 			throw new IllegalArgumentException("El correo ya esta registrado para un usuario.");
 		}
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
 		return Usuario.builder()
 				.fullName(coalesce(request.nombres(), email.split("@")[0]))
 				.email(email)
@@ -132,16 +144,17 @@ public class AsistenteService {
 				.active(true)
 				.createdAt(LocalDateTime.now())
 				.roles(new HashSet<>())
+				.clinica(clinica)
 				.build();
 	}
 
-	private Usuario resolveUsuarioForUpdate(AsistenteRequest request, Asistente asistente) {
+	private Usuario resolveUsuarioForUpdate(AsistenteRequest request, Asistente asistente, Long clinicaId) {
 		if (request.usuarioId() != null) {
 			return findUsuario(request.usuarioId());
 		}
 		Usuario usuario = asistente.getUsuario();
 		if (usuario == null) {
-			return resolveUsuarioForCreate(request);
+			return resolveUsuarioForCreate(request, clinicaId);
 		}
 		if (request.nombres() != null && !request.nombres().isBlank()) {
 			usuario.setFullName(fullName(request.nombres(), request.apellidos()));
@@ -169,6 +182,22 @@ public class AsistenteService {
 	private Asistente findEntityById(Long id) {
 		return asistenteRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Asistente no encontrado."));
+	}
+
+	private Asistente findEntityById(Long id, Long clinicaId) {
+		return asistenteRepository.findById(id)
+				.filter(asistente -> asistente.getClinica() != null
+						&& asistente.getClinica().getId().equals(clinicaId))
+				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a este asistente."));
+	}
+
+	private void validateUsuarioBelongsToClinic(Usuario usuario, Long clinicaId) {
+		if (usuario == null) {
+			return;
+		}
+		if (usuario.getClinica() == null || !usuario.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El usuario indicado no pertenece a tu clinica.");
+		}
 	}
 
 	private void validateUsuarioAvailable(Usuario usuario, Long currentAsistenteId) {

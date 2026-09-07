@@ -16,6 +16,6 @@ public interface AsistenteRepository extends JpaRepository<Asistente, Long> {
 
 	Optional<Asistente> findByUsuarioId(Long usuarioId);
 
-	@Query(value = "select a.* from asistentes a where (:active is null or a.active = :active) and (:search is null or upper(a.nombres) like upper('%' || :search || '%') or upper(a.apellidos) like upper('%' || :search || '%') or upper(a.email) like upper('%' || :search || '%') or upper(a.funciones) like upper('%' || :search || '%') or a.numero_documento like ('%' || :search || '%')) order by a.apellidos asc, a.nombres asc", nativeQuery = true)
-	List<Asistente> search(@Param("search") String search, @Param("active") Boolean active);
+	@Query(value = "select a.* from asistentes a where (:clinicaId is null or a.clinica_id = :clinicaId) and (:active is null or a.active = :active) and (:search is null or upper(a.nombres) like upper('%' || :search || '%') or upper(a.apellidos) like upper('%' || :search || '%') or upper(a.email) like upper('%' || :search || '%') or upper(a.funciones) like upper('%' || :search || '%') or a.numero_documento like ('%' || :search || '%')) order by a.apellidos asc, a.nombres asc", nativeQuery = true)
+	List<Asistente> search(@Param("clinicaId") Long clinicaId, @Param("search") String search, @Param("active") Boolean active);
 }

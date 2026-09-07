@@ -35,6 +35,13 @@ class MascotaServiceTest {
 	@Autowired
 	private MascotaService mascotaService;
 
+	@Autowired
+	private ClinicaService clinicaService;
+
+	private Long clinicaId() {
+		return clinicaService.getOrCreateDefaultClinic().getId();
+	}
+
 	@Test
 	void createFindUpdateAndDeactivateMascota() {
 		DuenioResponse duenio = createDuenio("71000001", "mascota.duenio@test.com");
@@ -50,9 +57,9 @@ class MascotaServiceTest {
 				new BigDecimal("18.50"),
 				"Vacunas al dia",
 				null
-		));
+		), clinicaId());
 
-		MascotaResponse found = mascotaService.findById(created.id());
+		MascotaResponse found = mascotaService.findById(created.id(), clinicaId());
 		MascotaResponse updated = mascotaService.update(created.id(), new MascotaRequest(
 				duenio.id(),
 				"Luna",
@@ -64,10 +71,10 @@ class MascotaServiceTest {
 				new BigDecimal("19.20"),
 				"Control mensual pendiente",
 				null
-		));
+		), clinicaId());
 
-		mascotaService.deactivate(created.id());
-		MascotaResponse inactive = mascotaService.findById(created.id());
+		mascotaService.deactivate(created.id(), clinicaId());
+		MascotaResponse inactive = mascotaService.findById(created.id(), clinicaId());
 
 		assertThat(found.duenioId()).isEqualTo(duenio.id());
 		assertThat(found.nombre()).isEqualTo("Luna");
@@ -93,7 +100,7 @@ class MascotaServiceTest {
 				new BigDecimal("4.80"),
 				null,
 				null
-		));
+		), clinicaId());
 		mascotaService.create(new MascotaRequest(
 				otherDuenio.id(),
 				"Rocky",
@@ -105,10 +112,10 @@ class MascotaServiceTest {
 				new BigDecimal("12.00"),
 				null,
 				null
-		));
+		), clinicaId());
 
-		List<MascotaResponse> byDuenio = mascotaService.findByDuenio(duenio.id());
-		List<MascotaResponse> searchResults = mascotaService.findAll("siames", null, true);
+		List<MascotaResponse> byDuenio = mascotaService.findByDuenio(duenio.id(), clinicaId());
+		List<MascotaResponse> searchResults = mascotaService.findAll("siames", null, true, clinicaId());
 
 		assertThat(byDuenio).hasSize(1);
 		assertThat(byDuenio.getFirst().nombre()).isEqualTo("Milo");
@@ -119,7 +126,7 @@ class MascotaServiceTest {
 	@Test
 	void rejectMascotaForInactiveDuenio() {
 		DuenioResponse duenio = createDuenio("71000004", "duenio.inactivo@test.com");
-		duenioService.deactivate(duenio.id());
+		duenioService.deactivate(duenio.id(), clinicaId());
 
 		assertThatThrownBy(() -> mascotaService.create(new MascotaRequest(
 				duenio.id(),
@@ -132,7 +139,7 @@ class MascotaServiceTest {
 				null,
 				null,
 				null
-		))).isInstanceOf(IllegalArgumentException.class);
+		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -170,7 +177,7 @@ class MascotaServiceTest {
 				"999555666",
 				email,
 				null
-		));
+		), clinicaId());
 	}
 
 	private MascotaResponse createMascota(Long duenioId, String nombre) {
@@ -185,6 +192,6 @@ class MascotaServiceTest {
 				new BigDecimal("8.50"),
 				null,
 				null
-		));
+		), clinicaId());
 	}
 }
