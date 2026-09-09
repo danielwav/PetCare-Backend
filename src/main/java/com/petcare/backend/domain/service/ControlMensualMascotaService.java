@@ -10,6 +10,7 @@ import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Veterinario;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +26,11 @@ public class ControlMensualMascotaService {
 	private final VeterinarioRepository veterinarioRepository;
 
 	@Transactional
-	public ControlMensualMascotaResponse create(Long mascotaId, ControlMensualMascotaRequest request) {
+	public ControlMensualMascotaResponse create(Long mascotaId, ControlMensualMascotaRequest request, Long clinicaId) {
 		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
 		Veterinario veterinario = findVeterinario(request.veterinarioId());
+		validateVeterinarioBelongsToClinic(veterinario, clinicaId);
 		validateBaseData(mascota, veterinario);
 		validateUniqueMonth(mascotaId, request.fechaControl().getYear(), request.fechaControl().getMonthValue(), null);
 
@@ -50,10 +53,9 @@ public class ControlMensualMascotaService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<ControlMensualMascotaResponse> findByMascota(Long mascotaId) {
-		if (!mascotaRepository.existsById(mascotaId)) {
-			throw new EntityNotFoundException("Mascota no encontrada.");
-		}
+	public List<ControlMensualMascotaResponse> findByMascota(Long mascotaId, Long clinicaId) {
+		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
 
 		return controlRepository.findByMascotaIdOrderByFechaControlDesc(mascotaId).stream()
 				.map(this::toResponse)
@@ -61,14 +63,18 @@ public class ControlMensualMascotaService {
 	}
 
 	@Transactional(readOnly = true)
-	public ControlMensualMascotaResponse findById(Long id) {
-		return toResponse(findEntityById(id));
+	public ControlMensualMascotaResponse findById(Long id, Long clinicaId) {
+		ControlMensualMascota control = findEntityById(id);
+		validateMascotaBelongsToClinic(control.getMascota(), clinicaId);
+		return toResponse(control);
 	}
 
 	@Transactional
-	public ControlMensualMascotaResponse update(Long id, ControlMensualMascotaRequest request) {
+	public ControlMensualMascotaResponse update(Long id, ControlMensualMascotaRequest request, Long clinicaId) {
 		ControlMensualMascota control = findEntityById(id);
+		validateMascotaBelongsToClinic(control.getMascota(), clinicaId);
 		Veterinario veterinario = findVeterinario(request.veterinarioId());
+		validateVeterinarioBelongsToClinic(veterinario, clinicaId);
 		validateBaseData(control.getMascota(), veterinario);
 		validateUniqueMonth(
 				control.getMascota().getId(),
@@ -104,6 +110,18 @@ public class ControlMensualMascotaService {
 		}
 		if (!veterinario.getActive()) {
 			throw new IllegalArgumentException("El veterinario no esta activo.");
+		}
+	}
+
+	private void validateMascotaBelongsToClinic(Mascota mascota, Long clinicaId) {
+		if (mascota.getClinica() == null || !mascota.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La mascota indicada no pertenece a tu clinica.");
+		}
+	}
+
+	private void validateVeterinarioBelongsToClinic(Veterinario veterinario, Long clinicaId) {
+		if (veterinario.getClinica() == null || !veterinario.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("El veterinario indicado no pertenece a tu clinica.");
 		}
 	}
 

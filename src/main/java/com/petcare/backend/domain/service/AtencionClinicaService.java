@@ -11,13 +11,14 @@ import com.petcare.backend.domain.repository.MascotaRepository;
 import com.petcare.backend.persistence.entity.AtencionClinica;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.ControlMensualMascota;
+import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Veterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.EstadoMascota;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,12 +33,14 @@ public class AtencionClinicaService {
 	private final ControlMensualMascotaRepository controlMensualMascotaRepository;
 	private final CitaRepository citaRepository;
 	private final MascotaRepository mascotaRepository;
+	private final AuthenticatedDuenioService authenticatedDuenioService;
 
 	@Transactional
-	public AtencionClinicaResponse register(Long citaId, AtencionClinicaRequest request, Authentication authentication) {
+	public AtencionClinicaResponse register(Long citaId, AtencionClinicaRequest request, Long clinicaId) {
 		Cita cita = citaRepository.findById(citaId)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
 
+		validateCitaBelongsToClinic(cita, clinicaId);
 		validateCanRegisterAttention(cita);
 		if (atencionClinicaRepository.existsByCitaId(citaId)) {
 			throw new IllegalArgumentException("La atencion clinica ya fue registrada para esta cita.");
@@ -70,8 +73,35 @@ public class AtencionClinicaService {
 
 	@Transactional(readOnly = true)
 	public AtencionClinicaResponse findById(Long id) {
-		return toResponse(atencionClinicaRepository.findById(id)
-				.orElseThrow(() -> new EntityNotFoundException("Atencion clinica no encontrada.")));
+		return toResponse(findAtencion(id));
+	}
+
+	@Transactional(readOnly = true)
+	public AtencionClinicaResponse findByIdScoped(Long id, Long clinicaId) {
+		AtencionClinica atencion = findAtencion(id);
+		validateMascotaBelongsToClinic(atencion.getMascota(), clinicaId);
+		return toResponse(atencion);
+	}
+
+	@Transactional(readOnly = true)
+	public AtencionClinicaResponse findByIdForDuenio(Long id, String email) {
+		AtencionClinica atencion = findAtencion(id);
+		validateMascotaBelongsToAuthenticatedDuenio(atencion.getMascota(), email);
+		return toResponse(atencion);
+	}
+
+	@Transactional(readOnly = true)
+	public HistoriaClinicaResponse findHistoriaClinicaByMascotaScoped(Long mascotaId, Long clinicaId) {
+		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToClinic(mascota, clinicaId);
+		return findHistoriaClinicaByMascota(mascotaId);
+	}
+
+	@Transactional(readOnly = true)
+	public HistoriaClinicaResponse findHistoriaClinicaByMascotaForDuenio(Long mascotaId, String email) {
+		Mascota mascota = findMascota(mascotaId);
+		validateMascotaBelongsToAuthenticatedDuenio(mascota, email);
+		return findHistoriaClinicaByMascota(mascotaId);
 	}
 
 	@Transactional(readOnly = true)
@@ -99,6 +129,35 @@ public class AtencionClinicaService {
 				atenciones,
 				controles
 		);
+	}
+
+	private AtencionClinica findAtencion(Long id) {
+		return atencionClinicaRepository.findById(id)
+				.orElseThrow(() -> new EntityNotFoundException("Atencion clinica no encontrada."));
+	}
+
+	private Mascota findMascota(Long id) {
+		return mascotaRepository.findById(id)
+				.orElseThrow(() -> new EntityNotFoundException("Mascota no encontrada."));
+	}
+
+	private void validateMascotaBelongsToClinic(Mascota mascota, Long clinicaId) {
+		if (mascota.getClinica() == null || !mascota.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La mascota indicada no pertenece a tu clinica.");
+		}
+	}
+
+private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		if (mascota.getDuenio() == null || !mascota.getDuenio().getId().equals(duenio.getId())) {
+			throw new AccessDeniedException("No tienes permiso para consultar la historia clinica de esta mascota.");
+		}
+	}
+
+	private void validateCitaBelongsToClinic(Cita cita, Long clinicaId) {
+		if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La cita indicada no pertenece a tu clinica.");
+		}
 	}
 
 	private void validateCanRegisterAttention(Cita cita) {

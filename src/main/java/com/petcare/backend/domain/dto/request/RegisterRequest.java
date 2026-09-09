@@ -9,6 +9,11 @@ public record RegisterRequest(
 		@NotBlank @Size(max = 120) String fullName,
 		@NotBlank @Email @Size(max = 120) String email,
 		@NotBlank @Size(min = 6, max = 100) String password,
-		@NotBlank @Size(min = 8, max = 20) @Pattern(regexp = "^[+\\d\\s-]+$", message = "Número de teléfono inválido") String telefono
+		@NotBlank @Size(min = 8, max = 20) @Pattern(regexp = "^[+\\d\\s-]+$", message = "Número de teléfono inválido") String telefono,
+		@Size(max = 120) String clinicaSlug
 ) {
+
+	public RegisterRequest(String fullName, String email, String password, String telefono) {
+		this(fullName, email, password, telefono, null);
+	}
 }

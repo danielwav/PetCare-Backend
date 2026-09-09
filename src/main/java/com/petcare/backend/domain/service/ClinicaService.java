@@ -10,6 +10,7 @@ import com.petcare.backend.persistence.enums.EstadoClinica;
 import com.petcare.backend.persistence.enums.PlanClinica;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +57,11 @@ public class ClinicaService {
 
 	@Transactional(readOnly = true)
 	public Long resolveClinicaId(String email) {
-		return findMyClinic(email.toLowerCase(Locale.ROOT)).getId();
+		Clinica clinica = findMyClinic(email.toLowerCase(Locale.ROOT));
+		if (clinica.getEstado() != EstadoClinica.ACTIVA) {
+			throw new AccessDeniedException("La clinica no esta activa.");
+		}
+		return clinica.getId();
 	}
 
 	@Transactional
@@ -81,7 +86,7 @@ public class ClinicaService {
 		return usuario.getClinica();
 	}
 
-	private ClinicaResponse toResponse(Clinica clinica) {
+	public static ClinicaResponse toResponse(Clinica clinica) {
 		return new ClinicaResponse(
 				clinica.getId(),
 				clinica.getNombre(),

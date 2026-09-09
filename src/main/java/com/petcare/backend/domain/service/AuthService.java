@@ -6,6 +6,7 @@ import com.petcare.backend.domain.dto.request.RefreshTokenRequest;
 import com.petcare.backend.domain.dto.request.RegisterClinicRequest;
 import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.response.AuthResponse;
+import com.petcare.backend.domain.dto.response.ClinicaResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
 import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.DuenioRepository;
@@ -15,6 +16,7 @@ import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
+import com.petcare.backend.persistence.enums.EstadoClinica;
 import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.security.JwtProperties;
 import com.petcare.backend.security.JwtService;
@@ -31,9 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -62,7 +64,7 @@ public class AuthService {
 		Rol role = rolRepository.findByName(roleName)
 				.orElseThrow(() -> new IllegalStateException("Rol base no encontrado: " + roleName));
 
-		Clinica clinica = clinicaService.getOrCreateDefaultClinic();
+		Clinica clinica = resolveRegisterClinic(request.clinicaSlug());
 
 		Usuario usuario = Usuario.builder()
 				.fullName(request.fullName())
@@ -76,7 +78,7 @@ public class AuthService {
 				.build();
 
 		Usuario savedUser = usuarioRepository.save(usuario);
-		linkExistingDuenioIfNeeded(savedUser, roleName);
+		linkExistingDuenioIfNeeded(savedUser, roleName, clinica);
 		return buildAuthResponse(savedUser);
 	}
 
@@ -180,7 +182,7 @@ public class AuthService {
 		usuarioRepository.save(usuario);
 
 		if (roleName == RoleName.ROLE_DUENIO) {
-			linkExistingDuenioIfNeeded(usuario, roleName);
+			linkExistingDuenioIfNeeded(usuario, roleName, clinica);
 		}
 
 		Map<String, String> result = new HashMap<>();
@@ -281,20 +283,25 @@ public class AuthService {
 				.orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado."));
 	}
 
-	private void linkExistingDuenioIfNeeded(Usuario usuario, RoleName roleName) {
+	private void linkExistingDuenioIfNeeded(Usuario usuario, RoleName roleName, Clinica clinica) {
 		if (roleName != RoleName.ROLE_DUENIO) {
 			return;
 		}
 
-		duenioRepository.findByEmail(usuario.getEmail())
+		duenioRepository.findByEmailAndClinicaId(usuario.getEmail(), clinica.getId())
 				.ifPresentOrElse(
 						duenio -> linkDuenioToUser(duenio, usuario),
-						() -> createDuenioForUser(usuario)
+						() -> {
+							if (duenioRepository.existsByEmail(usuario.getEmail())) {
+								throw new IllegalArgumentException("Ya existe un registro de dueño con este correo en otra veterinaria.");
+							}
+							createDuenioForUser(usuario, clinica);
+						}
 				);
 	}
 
 	@Transactional
-	protected void createDuenioForUser(Usuario usuario) {
+	protected void createDuenioForUser(Usuario usuario, Clinica clinica) {
 		String fullName = usuario.getFullName();
 		String[] parts = fullName.trim().split("\\s+", 2);
 		String nombres = parts[0];
@@ -302,6 +309,7 @@ public class AuthService {
 
 		Duenio duenio = Duenio.builder()
 				.usuario(usuario)
+				.clinica(clinica)
 				.nombres(nombres)
 				.apellidos(apellidos)
 				.tipoDocumento("PENDIENTE")
@@ -313,6 +321,19 @@ public class AuthService {
 				.updatedAt(LocalDateTime.now())
 				.build();
 		duenioRepository.save(duenio);
+	}
+
+	private Clinica resolveRegisterClinic(String clinicaSlug) {
+		if (clinicaSlug == null || clinicaSlug.isBlank()) {
+			return clinicaService.getOrCreateDefaultClinic();
+		}
+		String slug = clinicaSlug.trim().toLowerCase(Locale.ROOT);
+		Clinica clinica = clinicaRepository.findBySlug(slug)
+				.orElseThrow(() -> new IllegalArgumentException("Veterinaria no encontrada: " + slug));
+		if (clinica.getEstado() != EstadoClinica.ACTIVA) {
+			throw new IllegalArgumentException("La veterinaria no esta activa.");
+		}
+		return clinica;
 	}
 
 	private void linkDuenioToUser(Duenio duenio, Usuario usuario) {
@@ -329,6 +350,7 @@ public class AuthService {
 				.map(role -> role.getName().name())
 				.collect(Collectors.toSet());
 
+		ClinicaResponse clinica = usuario.getClinica() != null ? ClinicaService.toResponse(usuario.getClinica()) : null;
 		return new UserResponse(
 				usuario.getId(),
 				usuario.getFullName(),
@@ -336,7 +358,8 @@ public class AuthService {
 				usuario.getTelefono(),
 				usuario.getActive(),
 				usuario.getForcePasswordChange(),
-				roles
+				roles,
+				clinica
 		);
 	}
 
