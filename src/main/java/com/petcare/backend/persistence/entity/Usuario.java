@@ -50,7 +50,7 @@ public class Usuario {
 	private Boolean active;
 
 	@Builder.Default
-	@Column(nullable = false)
+	@Column
 	private Boolean forcePasswordChange = false;
 
 	@Column(length = 255)
