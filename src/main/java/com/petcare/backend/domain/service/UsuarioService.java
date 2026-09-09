@@ -119,7 +119,7 @@ public class UsuarioService {
                 usuario.getEmail(),
                 usuario.getTelefono(),
                 usuario.getActive(),
-                usuario.getForcePasswordChange(),
+                Boolean.TRUE.equals(usuario.getForcePasswordChange()),
                 roles,
                 clinica
         );
