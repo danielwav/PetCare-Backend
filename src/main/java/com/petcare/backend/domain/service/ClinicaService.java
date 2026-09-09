@@ -73,8 +73,20 @@ public class ClinicaService {
 		}
 		clinica.setNombre(request.nombre());
 		clinica.setSlug(slug);
+		clinica.setDireccion(blankToNull(request.direccion()));
+		clinica.setTelefono(blankToNull(request.telefono()));
+		clinica.setHorarioAtencion(blankToNull(request.horarioAtencion()));
+		clinica.setDescripcion(blankToNull(request.descripcion()));
+		clinica.setLogoUrl(blankToNull(request.logoUrl()));
 		clinica.setUpdatedAt(LocalDateTime.now());
 		return toResponse(clinicaRepository.save(clinica));
+	}
+
+	@Transactional(readOnly = true)
+	public Clinica findPublicBySlug(String slug) {
+		return clinicaRepository.findBySlug(slug.toLowerCase(Locale.ROOT))
+				.filter(c -> c.getEstado() == EstadoClinica.ACTIVA)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
 	}
 
 	private Clinica findMyClinic(String email) {
@@ -86,6 +98,10 @@ public class ClinicaService {
 		return usuario.getClinica();
 	}
 
+	private static String blankToNull(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
+	}
+
 	public static ClinicaResponse toResponse(Clinica clinica) {
 		return new ClinicaResponse(
 				clinica.getId(),
@@ -93,6 +109,11 @@ public class ClinicaService {
 				clinica.getSlug(),
 				clinica.getPlan().name(),
 				clinica.getEstado().name(),
+				clinica.getDireccion(),
+				clinica.getTelefono(),
+				clinica.getHorarioAtencion(),
+				clinica.getDescripcion(),
+				clinica.getLogoUrl(),
 				clinica.getCreatedAt()
 		);
 	}

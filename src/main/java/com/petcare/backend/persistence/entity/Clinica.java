@@ -45,6 +45,21 @@ public class Clinica {
 	@Column(nullable = false, length = 20)
 	private EstadoClinica estado;
 
+	@Column(length = 250)
+	private String direccion;
+
+	@Column(length = 20)
+	private String telefono;
+
+	@Column(length = 250)
+	private String horarioAtencion;
+
+	@Column(length = 1000)
+	private String descripcion;
+
+	@Column(length = 500)
+	private String logoUrl;
+
 	@Column(nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
