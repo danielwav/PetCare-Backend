@@ -22,11 +22,9 @@ import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.EstadoMascota;
 import com.petcare.backend.persistence.enums.SexoMascota;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.core.Authentication;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -38,7 +36,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -66,13 +63,6 @@ class AtencionClinicaServiceTest {
 	@Autowired
 	private CitaRepository citaRepository;
 
-	private Authentication auth;
-
-	@BeforeEach
-	void setUp() {
-		auth = mock(Authentication.class);
-	}
-
 	private Long clinicaId() {
 		return clinicaService.getOrCreateDefaultClinic().getId();
 	}
@@ -89,7 +79,7 @@ class AtencionClinicaServiceTest {
 		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 		moveCitaToPast(cita.id());
 
-		AtencionClinicaResponse atencion = atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth);
+		AtencionClinicaResponse atencion = atencionClinicaService.register(cita.id(), baseAtencionRequest(), clinicaId());
 		CitaResponse updatedCita = citaService.findById(cita.id(), clinicaId());
 		HistoriaClinicaResponse historia = atencionClinicaService.findHistoriaClinicaByMascota(data.mascota().id());
 
@@ -106,13 +96,13 @@ class AtencionClinicaServiceTest {
 		TestData data = createBaseData();
 		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
 
-		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth))
+		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), clinicaId()))
 				.isInstanceOf(IllegalArgumentException.class);
 
 		moveCitaToPast(cita.id());
-		atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth);
+		atencionClinicaService.register(cita.id(), baseAtencionRequest(), clinicaId());
 
-		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), auth))
+		assertThatThrownBy(() -> atencionClinicaService.register(cita.id(), baseAtencionRequest(), clinicaId()))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
@@ -123,13 +113,15 @@ class AtencionClinicaServiceTest {
 
 		ControlMensualMascotaResponse created = controlMensualMascotaService.create(
 				data.mascota().id(),
-				baseControlRequest(data.veterinario().id(), controlDate, "12.80")
+				baseControlRequest(data.veterinario().id(), controlDate, "12.80"),
+				clinicaId()
 		);
 		ControlMensualMascotaResponse updated = controlMensualMascotaService.update(
 				created.id(),
-				baseControlRequest(data.veterinario().id(), controlDate, "13.10")
+				baseControlRequest(data.veterinario().id(), controlDate, "13.10"),
+				clinicaId()
 		);
-		List<ControlMensualMascotaResponse> controls = controlMensualMascotaService.findByMascota(data.mascota().id());
+		List<ControlMensualMascotaResponse> controls = controlMensualMascotaService.findByMascota(data.mascota().id(), clinicaId());
 		HistoriaClinicaResponse historia = atencionClinicaService.findHistoriaClinicaByMascota(data.mascota().id());
 
 		assertThat(created.mes()).isEqualTo(controlDate.getMonthValue());
@@ -144,12 +136,14 @@ class AtencionClinicaServiceTest {
 		LocalDate controlDate = LocalDate.now().withDayOfMonth(1);
 		controlMensualMascotaService.create(
 				data.mascota().id(),
-				baseControlRequest(data.veterinario().id(), controlDate, "12.80")
+				baseControlRequest(data.veterinario().id(), controlDate, "12.80"),
+				clinicaId()
 		);
 
 		assertThatThrownBy(() -> controlMensualMascotaService.create(
 				data.mascota().id(),
-				baseControlRequest(data.veterinario().id(), controlDate.plusDays(5), "13.00")
+				baseControlRequest(data.veterinario().id(), controlDate.plusDays(5), "13.00"),
+				clinicaId()
 		)).isInstanceOf(IllegalArgumentException.class);
 	}
 

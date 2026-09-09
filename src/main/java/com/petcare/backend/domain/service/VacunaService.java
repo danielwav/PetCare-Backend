@@ -188,6 +188,24 @@ public class VacunaService {
 	}
 
 	@Transactional(readOnly = true)
+	public List<VacunaMascotaResponse> findUpcomingForDuenio(Integer dias, String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		int days = dias == null ? 60 : dias;
+		if (days <= 0) {
+			throw new IllegalArgumentException("La cantidad de dias debe ser mayor a cero.");
+		}
+
+		LocalDate today = LocalDate.now();
+		return vacunaMascotaRepository.findByMascotaDuenioIdAndFechaProximaDosisBetweenOrderByFechaProximaDosisAsc(
+						duenio.getId(),
+						today,
+						today.plusDays(days)
+				).stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
 	public List<VacunaMascotaResponse> findAlerts(Integer dias, Long clinicaId) {
 		int days = dias == null ? DEFAULT_ALERT_DAYS : dias;
 		if (days <= 0) {

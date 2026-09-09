@@ -16,6 +16,8 @@ public interface DuenioRepository extends JpaRepository<Duenio, Long> {
 
 	Optional<Duenio> findByEmail(String email);
 
+	Optional<Duenio> findByEmailAndClinicaId(String email, Long clinicaId);
+
 	Optional<Duenio> findByNumeroDocumento(String numeroDocumento);
 
 	Optional<Duenio> findByUsuarioId(Long usuarioId);

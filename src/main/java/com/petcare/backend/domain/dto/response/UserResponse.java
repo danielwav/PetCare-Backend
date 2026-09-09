@@ -9,6 +9,7 @@ public record UserResponse(
 		String telefono,
 		Boolean active,
 		Boolean forcePasswordChange,
-		Set<String> roles
+		Set<String> roles,
+		ClinicaResponse clinica
 ) {
 }

@@ -2,6 +2,7 @@ package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.UpdateUserRequest;
 import com.petcare.backend.domain.dto.request.UpdateUserRolesRequest;
+import com.petcare.backend.domain.dto.response.ClinicaResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
 import com.petcare.backend.domain.repository.RolRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
@@ -99,7 +100,7 @@ public class UsuarioService {
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
     }
 
-    private Usuario findUsuario(Long id, Long clinicaId) {
+    public Usuario findUsuario(Long id, Long clinicaId) {
         Usuario usuario = findUsuario(id);
         if (usuario.getClinica() == null || !usuario.getClinica().getId().equals(clinicaId)) {
             throw new org.springframework.security.access.AccessDeniedException("No tienes permiso para acceder a este usuario.");
@@ -111,6 +112,7 @@ public class UsuarioService {
         Set<String> roles = usuario.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
+        ClinicaResponse clinica = usuario.getClinica() != null ? ClinicaService.toResponse(usuario.getClinica()) : null;
         return new UserResponse(
                 usuario.getId(),
                 usuario.getFullName(),
@@ -118,7 +120,8 @@ public class UsuarioService {
                 usuario.getTelefono(),
                 usuario.getActive(),
                 usuario.getForcePasswordChange(),
-                roles
+                roles,
+                clinica
         );
     }
 }

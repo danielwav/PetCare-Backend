@@ -85,6 +85,9 @@ public class VacunaController {
 
 	@GetMapping("/api/vacunas/proximas")
 	public List<VacunaMascotaResponse> findUpcoming(@RequestParam(required = false) Integer dias, Authentication authentication) {
+		if (isDuenioOnly(authentication)) {
+			return vacunaService.findUpcomingForDuenio(dias, authentication.getName());
+		}
 		return vacunaService.findUpcoming(dias, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 

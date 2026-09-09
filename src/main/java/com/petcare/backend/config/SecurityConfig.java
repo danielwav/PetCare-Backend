@@ -52,6 +52,37 @@ public class SecurityConfig {
 						.requestMatchers("/api/usuarios/**")
 						.hasAuthority("ROLE_ADMIN")
 
+						.requestMatchers("/api/reportes/**", "/api/inasistencias/**", "/api/alertas/dia")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers("/api/controles-mensuales/**",
+								"/api/mascotas/*/controles-mensuales",
+								"/api/notas-seguimiento/**",
+								"/api/horarios-semanales/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.POST, "/api/citas/*/atencion")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO")
+						.requestMatchers(HttpMethod.PATCH, "/api/citas/*/inasistencia")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.PUT, "/api/citas/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.GET, "/api/citas/alertas-confirmacion")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.GET, "/api/atenciones/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE", "ROLE_DUENIO")
+						.requestMatchers(HttpMethod.POST, "/api/vacunas")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.PUT, "/api/vacunas/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.PATCH, "/api/vacunas/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.DELETE, "/api/vacunas/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+
+						.requestMatchers(HttpMethod.POST, "/api/duenios")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+						.requestMatchers(HttpMethod.DELETE, "/api/duenios/**")
+						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
+
 						.requestMatchers(HttpMethod.GET, "/api/clinicas/me").authenticated()
 						.requestMatchers(HttpMethod.PUT, "/api/clinicas/me")
 						.hasAuthority("ROLE_ADMIN")

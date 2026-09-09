@@ -28,11 +28,9 @@ import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.EstadoMascota;
 import com.petcare.backend.persistence.enums.SexoMascota;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.core.Authentication;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -82,13 +80,6 @@ class ReporteServiceTest {
 
 	@Autowired
 	private VacunaService vacunaService;
-
-	private Authentication auth;
-
-	@BeforeEach
-	void setUp() {
-		auth = mock(Authentication.class);
-	}
 
 	private Long clinicaId() {
 		return clinicaService.getOrCreateDefaultClinic().getId();
@@ -157,7 +148,7 @@ class ReporteServiceTest {
 				"Paciente estable",
 				null,
 				EstadoMascota.PENDIENTE
-		), auth);
+		), clinicaId());
 
 		HistoriaClinicaResponse historia = reporteService.findHistoriaClinica(data.mascota().id(), clinicaId());
 

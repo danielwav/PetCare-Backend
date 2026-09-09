@@ -21,16 +21,17 @@ public class HorarioSemanalService {
     private final UsuarioService usuarioService;
 
     @Transactional(readOnly = true)
-    public List<HorarioSemanalResponse> findBySemana(LocalDate fechaSemana) {
-        return repository.findByFechaSemana(fechaSemana).stream()
-                .map(this::toResponse)
+    public List<HorarioSemanalResponse> findBySemana(LocalDate fechaSemana, Long clinicaId) {
+        return repository.findScopedByFechaSemana(fechaSemana, clinicaId).stream()
+                .map(h -> toResponse(h, clinicaId))
                 .toList();
     }
 
     @Transactional
-    public List<HorarioSemanalResponse> saveWeek(HorarioSemanalRequest request) {
+    public List<HorarioSemanalResponse> saveWeek(HorarioSemanalRequest request, Long clinicaId) {
         LocalDate semana = request.semana();
         for (var asig : request.asignaciones()) {
+            usuarioService.findUsuario(asig.usuarioId(), clinicaId);
             var existing = repository.findByUsuarioIdAndFechaSemana(asig.usuarioId(), semana);
             existing.ifPresent(h -> {
                 h.setLunes(asig.lunes());
@@ -56,16 +57,17 @@ public class HorarioSemanalService {
                         .build());
             }
         }
-        return findBySemana(semana);
+        return findBySemana(semana, clinicaId);
     }
 
     @Transactional
-    public void deleteByUsuarioAndSemana(Long usuarioId, LocalDate fechaSemana) {
+    public void deleteByUsuarioAndSemana(Long usuarioId, LocalDate fechaSemana, Long clinicaId) {
+        usuarioService.findUsuario(usuarioId, clinicaId);
         repository.deleteByUsuarioIdAndFechaSemana(usuarioId, fechaSemana);
     }
 
-    private HorarioSemanalResponse toResponse(HorarioSemanal h) {
-        var usuario = usuarioService.findUsuario(h.getUsuarioId());
+    private HorarioSemanalResponse toResponse(HorarioSemanal h, Long clinicaId) {
+        var usuario = usuarioService.findUsuario(h.getUsuarioId(), clinicaId);
         String nombre = usuario.getFullName();
         String rol = usuario.getRoles().stream().findFirst().map(r -> r.getName().name()).orElse("");
         return new HorarioSemanalResponse(
