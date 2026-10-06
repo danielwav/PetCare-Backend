@@ -23,6 +23,27 @@ Backend del sistema PetCare, una API REST para gestión veterinaria: usuarios, d
 
 ## Deploy
 
+### P2 Multi-Clinic Migration
+
+Before deploying P2, follow [the PostgreSQL migration runbook](scripts/p2-migration.md).
+Hibernate `ddl-auto=update` does not remove the old global unique constraints or
+create case-insensitive catalog indexes. Back up and rehearse first, stop writers,
+run the explicit migration, then start P2. Fresh installations also require this
+migration after private schema bootstrap and before opening application access.
+
+Services, owner contact emails/documents, and vaccine catalogs are clinic-local.
+Login emails remain globally unique. New clinics start with empty catalogs.
+
+### Public Clinic Directory
+
+`GET /api/public/clinicas?q=&page=0&size=12` lists active clinics without login.
+Search matches clinic names, addresses, and active service names, ignoring case
+and Spanish vowel accents. Page size must be between 1 and 24; queries are limited
+to 100 characters. The response contains `items`, `page`, `totalPages`, and
+`totalElements`, with public clinic details and active service names only.
+Individual profiles and service prices remain available at
+`/api/public/clinicas/{slug}` and `/api/public/clinicas/{slug}/servicios`.
+
 ### AWS (Producción actual)
 
 - **Backend API**: `https://d1eq863qpgnni5.cloudfront.net/api`

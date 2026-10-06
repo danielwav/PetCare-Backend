@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -29,15 +30,15 @@ public class DuenioService {
 
 	@Transactional
 	public DuenioResponse create(DuenioRequest request, Long clinicaId) {
-		validateUniqueEmail(request.email(), null);
-		validateUniqueDocument(request.numeroDocumento(), null);
+		validateUniqueEmail(request.email(), null, clinicaId);
+		validateUniqueDocument(request.numeroDocumento(), null, clinicaId);
 
-		Usuario usuario = resolveUsuarioForCreate(request);
-		if (usuario != null && duenioRepository.findByUsuarioId(usuario.getId()).isPresent()) {
-			throw new IllegalArgumentException("El usuario ya esta relacionado a un duenio.");
-		}
+		Usuario usuario = resolveUsuarioForCreate(request, clinicaId);
 		if (usuario != null && !belongsToClinic(usuario, clinicaId)) {
 			throw new AccessDeniedException("El usuario indicado no pertenece a tu clinica.");
+		}
+		if (usuario != null && duenioRepository.findByUsuarioId(usuario.getId()).isPresent()) {
+			throw new IllegalArgumentException("El usuario ya esta relacionado a un duenio.");
 		}
 
 		Clinica clinica = clinicaRepository.findById(clinicaId)
@@ -89,8 +90,8 @@ public class DuenioService {
 	public DuenioResponse update(Long id, DuenioRequest request, Long clinicaId) {
 		Duenio duenio = findEntityById(id, clinicaId);
 
-		validateUniqueEmail(request.email(), id);
-		validateUniqueDocument(request.numeroDocumento(), id);
+		validateUniqueEmail(request.email(), id, clinicaId);
+		validateUniqueDocument(request.numeroDocumento(), id, clinicaId);
 
 		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
 		if (usuario != null && !belongsToClinic(usuario, clinicaId)) {
@@ -119,14 +120,13 @@ public class DuenioService {
 
 	@Transactional
 	public DuenioResponse updateOwn(Long id, DuenioRequest request, String email) {
-		authenticatedDuenioService.validateOwnDuenio(email, id);
+		Duenio duenio = authenticatedDuenioService.validateOwnDuenio(email, id);
 		if (request.usuarioId() != null) {
 			throw new IllegalArgumentException("No se puede cambiar el usuario vinculado desde el perfil de duenio.");
 		}
-		Duenio duenio = findEntityById(id);
-
-		validateUniqueEmail(request.email(), id);
-		validateUniqueDocument(request.numeroDocumento(), id);
+		Long clinicaId = duenio.getClinica().getId();
+		validateUniqueEmail(request.email(), id, clinicaId);
+		validateUniqueDocument(request.numeroDocumento(), id, clinicaId);
 
 		duenio.setNombres(normalizeText(request.nombres()));
 		duenio.setApellidos(normalizeText(request.apellidos()));
@@ -138,9 +138,6 @@ public class DuenioService {
 		duenio.setUpdatedAt(LocalDateTime.now());
 
 		Usuario usuario = duenio.getUsuario();
-		if (usuario == null) {
-			usuario = usuarioRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
-		}
 		if (usuario != null) {
 			String fullName = (request.nombres() + " " + request.apellidos()).trim();
 			usuario.setFullName(fullName);
@@ -166,15 +163,8 @@ public class DuenioService {
 		duenioRepository.save(duenio);
 	}
 
-	private Duenio findEntityById(Long id) {
-		return duenioRepository.findById(id)
-				.orElseThrow(() -> new EntityNotFoundException("Duenio no encontrado."));
-	}
-
 	private Duenio findEntityById(Long id, Long clinicaId) {
-		return duenioRepository.findById(id)
-				.filter(duenio -> duenio.getClinica() != null
-						&& duenio.getClinica().getId().equals(clinicaId))
+		return duenioRepository.findByIdAndClinicaId(id, clinicaId)
 				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a este duenio."));
 	}
 
@@ -191,13 +181,14 @@ public class DuenioService {
 				.orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado."));
 	}
 
-	private Usuario resolveUsuarioForCreate(DuenioRequest request) {
+	private Usuario resolveUsuarioForCreate(DuenioRequest request, Long clinicaId) {
 		Usuario explicitUser = findUsuarioIfPresent(request.usuarioId());
 		if (explicitUser != null) {
 			return explicitUser;
 		}
 
 		return usuarioRepository.findByEmail(normalizeEmail(request.email()))
+				.filter(usuario -> belongsToClinic(usuario, clinicaId))
 				.filter(this::isDuenioUser)
 				.orElse(null);
 	}
@@ -207,18 +198,18 @@ public class DuenioService {
 				.anyMatch(role -> role.getName() == RoleName.ROLE_DUENIO);
 	}
 
-	private void validateUniqueEmail(String email, Long currentId) {
+	private void validateUniqueEmail(String email, Long currentId, Long clinicaId) {
 		String normalizedEmail = normalizeEmail(email);
-		duenioRepository.findByEmail(normalizedEmail)
+		duenioRepository.findByEmailAndClinicaId(normalizedEmail, clinicaId)
 				.filter(duenio -> currentId == null || !duenio.getId().equals(currentId))
 				.ifPresent(duenio -> {
 					throw new IllegalArgumentException("El correo ya esta registrado para otro duenio.");
 				});
 	}
 
-	private void validateUniqueDocument(String numeroDocumento, Long currentId) {
+	private void validateUniqueDocument(String numeroDocumento, Long currentId, Long clinicaId) {
 		String normalizedDocument = numeroDocumento.trim();
-		duenioRepository.findByNumeroDocumento(normalizedDocument)
+		duenioRepository.findByNumeroDocumentoAndClinicaId(normalizedDocument, clinicaId)
 				.filter(duenio -> currentId == null || !duenio.getId().equals(currentId))
 				.ifPresent(duenio -> {
 					throw new IllegalArgumentException("El documento ya esta registrado para otro duenio.");
@@ -244,7 +235,7 @@ public class DuenioService {
 	}
 
 	private String normalizeEmail(String value) {
-		return value.trim().toLowerCase();
+		return value.trim().toLowerCase(Locale.ROOT);
 	}
 
 	private String normalizeText(String value) {

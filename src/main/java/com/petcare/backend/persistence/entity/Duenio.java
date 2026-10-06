@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,7 +20,10 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "duenios")
+@Table(name = "duenios", uniqueConstraints = {
+		@UniqueConstraint(name = "uk_duenios_clinica_email", columnNames = {"clinica_id", "email"}),
+		@UniqueConstraint(name = "uk_duenios_clinica_documento", columnNames = {"clinica_id", "numero_documento"})
+})
 @Getter
 @Setter
 @Builder
@@ -48,13 +52,13 @@ public class Duenio {
 	@Column(nullable = false, length = 30)
 	private String tipoDocumento;
 
-	@Column(nullable = false, unique = true, length = 20)
+	@Column(nullable = false, length = 20)
 	private String numeroDocumento;
 
 	@Column(nullable = false, length = 20)
 	private String telefono;
 
-	@Column(nullable = false, unique = true, length = 120)
+	@Column(nullable = false, length = 120)
 	private String email;
 
 	@Column(length = 180)

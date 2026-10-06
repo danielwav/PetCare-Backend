@@ -109,6 +109,7 @@ public class AuthService {
 		return buildAuthResponse(savedUser);
 	}
 
+	@Transactional(readOnly = true)
 	public AuthResponse login(LoginRequest request) {
 		Authentication authentication = authenticationManager.authenticate(
 				new UsernamePasswordAuthenticationToken(request.email().toLowerCase(), request.password())
@@ -119,6 +120,7 @@ public class AuthService {
 		return buildAuthResponse(usuario);
 	}
 
+	@Transactional(readOnly = true)
 	public AuthResponse refresh(RefreshTokenRequest request) {
 		if (!jwtService.isValidRefreshToken(request.refreshToken())) {
 			throw new IllegalArgumentException("Refresh token invalido o expirado.");
@@ -130,10 +132,12 @@ public class AuthService {
 		return buildAuthResponse(usuario);
 	}
 
+	@Transactional(readOnly = true)
 	public UserResponse me(String email) {
 		return toUserResponse(findByEmail(email));
 	}
 
+	@Transactional(readOnly = true)
 	public UserResponse meById(Long id) {
 		Usuario usuario = usuarioRepository.findById(id)
 				.orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
@@ -291,12 +295,7 @@ public class AuthService {
 		duenioRepository.findByEmailAndClinicaId(usuario.getEmail(), clinica.getId())
 				.ifPresentOrElse(
 						duenio -> linkDuenioToUser(duenio, usuario),
-						() -> {
-							if (duenioRepository.existsByEmail(usuario.getEmail())) {
-								throw new IllegalArgumentException("Ya existe un registro de dueño con este correo en otra veterinaria.");
-							}
-							createDuenioForUser(usuario, clinica);
-						}
+						() -> createDuenioForUser(usuario, clinica)
 				);
 	}
 
@@ -324,12 +323,14 @@ public class AuthService {
 	}
 
 	private Clinica resolveRegisterClinic(String clinicaSlug) {
+		Clinica clinica;
 		if (clinicaSlug == null || clinicaSlug.isBlank()) {
-			return clinicaService.getOrCreateDefaultClinic();
+			clinica = clinicaService.getOrCreateDefaultClinic();
+		} else {
+			String slug = clinicaSlug.trim().toLowerCase(Locale.ROOT);
+			clinica = clinicaRepository.findBySlug(slug)
+					.orElseThrow(() -> new IllegalArgumentException("Veterinaria no encontrada: " + slug));
 		}
-		String slug = clinicaSlug.trim().toLowerCase(Locale.ROOT);
-		Clinica clinica = clinicaRepository.findBySlug(slug)
-				.orElseThrow(() -> new IllegalArgumentException("Veterinaria no encontrada: " + slug));
 		if (clinica.getEstado() != EstadoClinica.ACTIVA) {
 			throw new IllegalArgumentException("La veterinaria no esta activa.");
 		}

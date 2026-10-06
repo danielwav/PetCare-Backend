@@ -94,7 +94,7 @@ class ReporteServiceTest {
 				"Rabia",
 				"Proteccion antirrabica anual.",
 				null
-		));
+		), clinicaId());
 		VacunaMascotaResponse vacunaMascota = vacunaService.registerForMascota(data.mascota().id(), new VacunaMascotaRequest(
 				vacuna.id(),
 				data.veterinario().id(),

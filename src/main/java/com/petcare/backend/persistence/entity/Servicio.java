@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,7 +20,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "servicios")
+@Table(name = "servicios", uniqueConstraints = @UniqueConstraint(
+        name = "uk_servicios_clinica_nombre", columnNames = {"clinica_id", "nombre"}))
 @Getter
 @Setter
 @Builder
@@ -35,7 +37,7 @@ public class Servicio {
 	@JoinColumn(name = "clinica_id")
 	private Clinica clinica;
 
-	@Column(nullable = false, unique = true, length = 100)
+	@Column(nullable = false, length = 100)
 	private String nombre;
 
 	@Column(nullable = false, length = 300)

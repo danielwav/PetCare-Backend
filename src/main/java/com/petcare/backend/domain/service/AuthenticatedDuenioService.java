@@ -7,6 +7,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
+
 @Service
 @RequiredArgsConstructor
 public class AuthenticatedDuenioService {
@@ -17,7 +19,9 @@ public class AuthenticatedDuenioService {
 	public Duenio findByAuthenticatedEmail(String email) {
 		String normalized = normalizeEmail(email);
 		return duenioRepository.findByUsuarioEmail(normalized)
-				.or(() -> duenioRepository.findByEmail(normalized))
+				.filter(duenio -> duenio.getClinica() != null
+						&& duenio.getUsuario().getClinica() != null
+						&& duenio.getClinica().getId().equals(duenio.getUsuario().getClinica().getId()))
 				.orElseThrow(() -> new AccessDeniedException("El usuario autenticado no tiene un perfil de duenio vinculado."));
 	}
 
@@ -31,6 +35,6 @@ public class AuthenticatedDuenioService {
 	}
 
 	private String normalizeEmail(String email) {
-		return email.trim().toLowerCase();
+		return email.trim().toLowerCase(Locale.ROOT);
 	}
 }

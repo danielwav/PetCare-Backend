@@ -12,6 +12,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -44,18 +45,19 @@ public class DataInitializer implements CommandLineRunner {
     private final ClinicaRepository clinicaRepository;
 
     @Override
+    @Transactional
     public void run(String... args) {
         var roles = initRoles();
         var demoClinic = defaultClinica();
-        initUsuarios(roles, demoClinic);
-        initServicios();
-        initVacunas();
-        initVeterinarios();
-        initAsistentes();
-        initDuenios();
-        initMascotas();
-        initCitas();
         backfillClinica(demoClinic);
+        initUsuarios(roles, demoClinic);
+        initServicios(demoClinic);
+        initVacunas(demoClinic);
+        initVeterinarios(demoClinic);
+        initAsistentes(demoClinic);
+        initDuenios(demoClinic);
+        initMascotas(demoClinic);
+        initCitas(demoClinic);
     }
 
     private Map<RoleName, Rol> initRoles() {
@@ -93,6 +95,16 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void backfillClinica(Clinica clinica) {
+        // The old demo backfill is safe only for a single-clinic legacy database.
+        if (clinicaRepository.count() > 1 && (
+                duenioRepository.findAll().stream().anyMatch(d -> d.getClinica() == null)
+                || servicioRepository.findAll().stream().anyMatch(s -> s.getClinica() == null)
+                || veterinarioRepository.findAll().stream().anyMatch(v -> v.getClinica() == null)
+                || asistenteRepository.findAll().stream().anyMatch(a -> a.getClinica() == null)
+                || mascotaRepository.findAll().stream().anyMatch(m -> m.getClinica() == null)
+                || citaRepository.findAll().stream().anyMatch(c -> c.getClinica() == null))) {
+            throw new IllegalStateException("Ambiguous legacy clinic ownership; resolve null tenants before seeding (scripts/p2-migration.md).");
+        }
         for (var d : duenioRepository.findAll()) {
             if (d.getClinica() == null) {
                 d.setClinica(clinica);
@@ -157,6 +169,7 @@ public class DataInitializer implements CommandLineRunner {
             var existingUser = usuarioRepository.findByEmail(email);
             if (existingUser.isPresent()) {
                 var user = existingUser.get();
+                if (user.getClinica() != null && !demoClinic.getId().equals(user.getClinica().getId())) continue;
                 user.setFullName((String) u.get("name"));
                 user.setActive(true);
                 user.setRoles(roleSet);
@@ -181,7 +194,7 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initServicios() {
+    private void initServicios(Clinica demoClinic) {
         var servicios = List.of(
                 new Object[]{"Consulta General", "Atencion medica general para mascotas", new BigDecimal("60.00")},
                 new Object[]{"Consulta Especializada", "Atencion con especialista en areas especificas", new BigDecimal("90.00")},
@@ -206,8 +219,9 @@ public class DataInitializer implements CommandLineRunner {
         );
         for (var s : servicios) {
             var nombre = (String) s[0];
-            if (servicioRepository.findByNombreIgnoreCase(nombre).isPresent()) continue;
+            if (servicioRepository.findByClinicaIdAndNombreIgnoreCase(demoClinic.getId(), nombre).isPresent()) continue;
             servicioRepository.save(Servicio.builder()
+                    .clinica(demoClinic)
                     .nombre(nombre)
                     .descripcion((String) s[1])
                     .costoBase((BigDecimal) s[2])
@@ -218,7 +232,7 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initVacunas() {
+    private void initVacunas(Clinica demoClinic) {
         var vacunas = List.of(
                 new Object[]{"Rabia Canina", "Vacuna antirrabica para caninos, dosis unica anual", 365},
                 new Object[]{"Multiple Canina (Sextuple)", "Protege contra moquillo, hepatitis, parvovirus, parainfluenza, leptospira y coronavirus", 365},
@@ -235,8 +249,9 @@ public class DataInitializer implements CommandLineRunner {
         );
         for (var v : vacunas) {
             var nombre = (String) v[0];
-            if (vacunaRepository.findByNombreIgnoreCase(nombre).isPresent()) continue;
+            if (vacunaRepository.findByNombreIgnoreCaseAndClinicaId(nombre, demoClinic.getId()).isPresent()) continue;
             vacunaRepository.save(Vacuna.builder()
+                    .clinica(demoClinic)
                     .nombre(nombre)
                     .descripcion((String) v[1])
                     .intervaloProximaDosisDias((Integer) v[2])
@@ -247,14 +262,21 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initVeterinarios() {
-        var vetUser1 = usuarioRepository.findByEmail("vet@petcare.com").orElse(null);
-        var vetUser2 = usuarioRepository.findByEmail("miguel.alvarez@petcare.com").orElse(null);
-        var vetUser3 = usuarioRepository.findByEmail("patricia.h@petcare.com").orElse(null);
-        var vetUser4 = usuarioRepository.findByEmail("ricardo.g@petcare.com").orElse(null);
+    private Usuario demoUsuario(String email, Clinica demoClinic) {
+        return usuarioRepository.findByEmail(email)
+                .filter(user -> user.getClinica() != null && demoClinic.getId().equals(user.getClinica().getId()))
+                .orElse(null);
+    }
+
+    private void initVeterinarios(Clinica demoClinic) {
+        var vetUser1 = demoUsuario("vet@petcare.com", demoClinic);
+        var vetUser2 = demoUsuario("miguel.alvarez@petcare.com", demoClinic);
+        var vetUser3 = demoUsuario("patricia.h@petcare.com", demoClinic);
+        var vetUser4 = demoUsuario("ricardo.g@petcare.com", demoClinic);
 
         if (veterinarioRepository.findByEmail("vet@petcare.com").isEmpty()) {
             var vet1 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(vetUser1)
                     .nombres("Carlos").apellidos("Lopez")
                     .numeroColegiatura("CMP-12345").especialidad("Medicina General")
@@ -273,6 +295,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("miguel.alvarez@petcare.com").isEmpty()) {
             var vet2 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(vetUser2)
                     .nombres("Miguel").apellidos("Alvarez")
                     .numeroColegiatura("CMP-56789").especialidad("Medicina General")
@@ -291,6 +314,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("patricia.h@petcare.com").isEmpty()) {
             var vet3 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(vetUser3)
                     .nombres("Patricia").apellidos("Huaman")
                     .numeroColegiatura("CMP-45678").especialidad("Medicina Felina")
@@ -309,6 +333,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("ricardo.g@petcare.com").isEmpty()) {
             var vet4 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(vetUser4)
                     .nombres("Ricardo").apellidos("Gutierrez")
                     .numeroColegiatura("CMP-78901").especialidad("Cirugia")
@@ -325,6 +350,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("maria.fernandez@petcare.com").isEmpty()) {
             var vet5 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(null)
                     .nombres("Maria").apellidos("Fernandez")
                     .numeroColegiatura("CMP-23456").especialidad("Cirugia Veterinaria")
@@ -342,6 +368,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("jose.ramirez@petcare.com").isEmpty()) {
             var vet6 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(null)
                     .nombres("Jose").apellidos("Ramirez")
                     .numeroColegiatura("CMP-34567").especialidad("Dermatologia")
@@ -358,6 +385,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("diana.torres@petcare.com").isEmpty()) {
             var vet7 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(null)
                     .nombres("Diana").apellidos("Torres")
                     .numeroColegiatura("CMP-45679").especialidad("Medicina Felina")
@@ -376,6 +404,7 @@ public class DataInitializer implements CommandLineRunner {
 
         if (veterinarioRepository.findByEmail("andrea.castillo@petcare.com").isEmpty()) {
             var vet8 = Veterinario.builder()
+                    .clinica(demoClinic)
                     .usuario(null)
                     .nombres("Andrea").apellidos("Castillo")
                     .numeroColegiatura("CMP-67890").especialidad("Cardiologia")
@@ -404,13 +433,14 @@ public class DataInitializer implements CommandLineRunner {
                 .build();
     }
 
-    private void initAsistentes() {
-        var asisUser1 = usuarioRepository.findByEmail("asistente@petcare.com").orElse(null);
-        var asisUser2 = usuarioRepository.findByEmail("sofia.reyes@petcare.com").orElse(null);
-        var asisUser3 = usuarioRepository.findByEmail("diego.c@petcare.com").orElse(null);
+    private void initAsistentes(Clinica demoClinic) {
+        var asisUser1 = demoUsuario("asistente@petcare.com", demoClinic);
+        var asisUser2 = demoUsuario("sofia.reyes@petcare.com", demoClinic);
+        var asisUser3 = demoUsuario("diego.c@petcare.com", demoClinic);
 
         if (asistenteRepository.findByEmail("asistente@petcare.com").isEmpty()) {
             asistenteRepository.save(Asistente.builder()
+                    .clinica(demoClinic)
                     .usuario(asisUser1).nombres("Maria").apellidos("Garcia")
                     .tipoDocumento("DNI").numeroDocumento("87654321")
                     .telefono("999333444").email("asistente@petcare.com")
@@ -420,6 +450,7 @@ public class DataInitializer implements CommandLineRunner {
         }
         if (asistenteRepository.findByEmail("sofia.reyes@petcare.com").isEmpty()) {
             asistenteRepository.save(Asistente.builder()
+                    .clinica(demoClinic)
                     .usuario(asisUser2).nombres("Sofia").apellidos("Reyes")
                     .tipoDocumento("DNI").numeroDocumento("11223344")
                     .telefono("999777333").email("sofia.reyes@petcare.com")
@@ -429,6 +460,7 @@ public class DataInitializer implements CommandLineRunner {
         }
         if (asistenteRepository.findByEmail("diego.c@petcare.com").isEmpty()) {
             asistenteRepository.save(Asistente.builder()
+                    .clinica(demoClinic)
                     .usuario(asisUser3).nombres("Diego").apellidos("Castillo")
                     .tipoDocumento("DNI").numeroDocumento("22334455")
                     .telefono("998222444").email("diego.c@petcare.com")
@@ -438,6 +470,7 @@ public class DataInitializer implements CommandLineRunner {
         }
         if (asistenteRepository.findByEmail("luis.torres@petcare.com").isEmpty()) {
             asistenteRepository.save(Asistente.builder()
+                    .clinica(demoClinic)
                     .usuario(null).nombres("Luis").apellidos("Torres")
                     .tipoDocumento("DNI").numeroDocumento("98765432")
                     .telefono("999555111").email("luis.torres@petcare.com")
@@ -447,6 +480,7 @@ public class DataInitializer implements CommandLineRunner {
         }
         if (asistenteRepository.findByEmail("elena.vargas@petcare.com").isEmpty()) {
             asistenteRepository.save(Asistente.builder()
+                    .clinica(demoClinic)
                     .usuario(null).nombres("Elena").apellidos("Vargas")
                     .tipoDocumento("CE").numeroDocumento("CE-007654")
                     .telefono("998666888").email("elena.vargas@petcare.com")
@@ -456,12 +490,9 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initDuenios() {
-        var duenioUser1 = usuarioRepository.findByEmail("duenio@petcare.com").orElse(null);
-        var duenioUser2 = usuarioRepository.findByEmail("ana.gomez@email.com").orElse(null);
-        var duenioUser3 = usuarioRepository.findByEmail("pedro.s@email.com").orElse(null);
-        var duenioUser4 = usuarioRepository.findByEmail("carmen.t@email.com").orElse(null);
-        var duenioUser5 = usuarioRepository.findByEmail("luis.f@email.com").orElse(null);
+    private void initDuenios(Clinica demoClinic) {
+        var duenioUser1 = demoUsuario("duenio@petcare.com", demoClinic);
+        var duenioUser2 = demoUsuario("ana.gomez@email.com", demoClinic);
 
         var duenios = List.of(
                 new Object[]{duenioUser1, "Juan", "Perez", "DNI", "12345678", "999888777", "duenio@petcare.com", "Av. Siempre Viva 123, Lima"},
@@ -477,8 +508,9 @@ public class DataInitializer implements CommandLineRunner {
         );
         for (var d : duenios) {
             var email = (String) d[6];
-            if (duenioRepository.findByEmail(email).isPresent()) continue;
+            if (duenioRepository.findByEmailAndClinicaId(email, demoClinic.getId()).isPresent()) continue;
             duenioRepository.save(Duenio.builder()
+                    .clinica(demoClinic)
                     .usuario((Usuario) d[0])
                     .nombres((String) d[1]).apellidos((String) d[2])
                     .tipoDocumento((String) d[3]).numeroDocumento((String) d[4])
@@ -489,17 +521,17 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initMascotas() {
-        var d1 = duenioRepository.findByEmail("duenio@petcare.com");
-        var d2 = duenioRepository.findByEmail("ana.gomez@email.com");
-        var d3 = duenioRepository.findByEmail("pedro.m@email.com");
-        var d4 = duenioRepository.findByEmail("carmen.lopez@email.com");
-        var d5 = duenioRepository.findByEmail("roberto.s@email.com");
-        var d6 = duenioRepository.findByEmail("laura.diaz@email.com");
-        var d7 = duenioRepository.findByEmail("diego.h@email.com");
-        var d8 = duenioRepository.findByEmail("valeria.r@email.com");
-        var d9 = duenioRepository.findByEmail("fernando.m@email.com");
-        var d10 = duenioRepository.findByEmail("gabriela.t@email.com");
+    private void initMascotas(Clinica demoClinic) {
+        var d1 = duenioRepository.findByEmailAndClinicaId("duenio@petcare.com", demoClinic.getId());
+        var d2 = duenioRepository.findByEmailAndClinicaId("ana.gomez@email.com", demoClinic.getId());
+        var d3 = duenioRepository.findByEmailAndClinicaId("pedro.m@email.com", demoClinic.getId());
+        var d4 = duenioRepository.findByEmailAndClinicaId("carmen.lopez@email.com", demoClinic.getId());
+        var d5 = duenioRepository.findByEmailAndClinicaId("roberto.s@email.com", demoClinic.getId());
+        var d6 = duenioRepository.findByEmailAndClinicaId("laura.diaz@email.com", demoClinic.getId());
+        var d7 = duenioRepository.findByEmailAndClinicaId("diego.h@email.com", demoClinic.getId());
+        var d8 = duenioRepository.findByEmailAndClinicaId("valeria.r@email.com", demoClinic.getId());
+        var d9 = duenioRepository.findByEmailAndClinicaId("fernando.m@email.com", demoClinic.getId());
+        var d10 = duenioRepository.findByEmailAndClinicaId("gabriela.t@email.com", demoClinic.getId());
 
         if (d1.isPresent() && mascotaRepository.findByDuenioIdOrderByNombreAsc(d1.get().getId()).isEmpty()) {
             var duenio = d1.get();
@@ -557,29 +589,30 @@ public class DataInitializer implements CommandLineRunner {
 
     private void saveMascota(Duenio duenio, String nombre, String especie, String raza, SexoMascota sexo, LocalDate fechaNac, String color, BigDecimal peso, String observaciones) {
         mascotaRepository.save(Mascota.builder()
+                .clinica(duenio.getClinica())
                 .duenio(duenio).nombre(nombre).especie(especie).raza(raza).sexo(sexo)
                 .fechaNacimiento(fechaNac).color(color).pesoKg(peso).observaciones(observaciones)
                 .active(true).createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
                 .build());
     }
 
-    private void initCitas() {
+    private void initCitas(Clinica demoClinic) {
         var hoy = LocalDate.now();
 
-        var servicios = servicioRepository.findAll();
-        var consulGral = servicios.stream().filter(s -> s.getNombre().equals("Consulta General")).findFirst().orElse(null);
-        var consulEsp = servicios.stream().filter(s -> s.getNombre().equals("Consulta Especializada")).findFirst().orElse(null);
-        var vacCompleta = servicios.stream().filter(s -> s.getNombre().equals("Vacunacion Completa")).findFirst().orElse(null);
-        var vacAntirrab = servicios.stream().filter(s -> s.getNombre().equals("Vacunacion Antirrabica")).findFirst().orElse(null);
-        var desparasit = servicios.stream().filter(s -> s.getNombre().equals("Desparasitacion")).findFirst().orElse(null);
-        var limpDental = servicios.stream().filter(s -> s.getNombre().equals("Limpieza Dental")).findFirst().orElse(null);
-        var ecografia = servicios.stream().filter(s -> s.getNombre().equals("Ecografia")).findFirst().orElse(null);
-        var radiografia = servicios.stream().filter(s -> s.getNombre().equals("Radiografia")).findFirst().orElse(null);
-        var electro = servicios.stream().filter(s -> s.getNombre().equals("Electrocardiograma")).findFirst().orElse(null);
+        var servicios = servicioRepository.findAllByClinicaIdOrderByNombreAsc(demoClinic.getId());
+        var consulGral = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Consulta General")).findFirst().orElse(null);
+        var consulEsp = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Consulta Especializada")).findFirst().orElse(null);
+        var vacCompleta = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Vacunacion Completa")).findFirst().orElse(null);
+        var vacAntirrab = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Vacunacion Antirrabica")).findFirst().orElse(null);
+        var desparasit = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Desparasitacion")).findFirst().orElse(null);
+        var limpDental = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Limpieza Dental")).findFirst().orElse(null);
+        var ecografia = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Ecografia")).findFirst().orElse(null);
+        var radiografia = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Radiografia")).findFirst().orElse(null);
+        var electro = servicios.stream().filter(s -> s.getNombre().equalsIgnoreCase("Electrocardiograma")).findFirst().orElse(null);
 
-        if (citaRepository.count() > 0) return;
+        if (!citaRepository.search(null, null, demoClinic.getId(), null, null, null).isEmpty()) return;
 
-        var duenios = duenioRepository.findAll();
+        var duenios = duenioRepository.search(demoClinic.getId(), null, null);
         var duenioMap = new HashMap<String, Duenio>();
         for (var d : duenios) duenioMap.put(d.getEmail(), d);
 
@@ -594,7 +627,7 @@ public class DataInitializer implements CommandLineRunner {
         var d9 = duenioMap.get("fernando.m@email.com");
         var d10 = duenioMap.get("gabriela.t@email.com");
 
-        var mascotas = mascotaRepository.findAll();
+        var mascotas = mascotaRepository.search(demoClinic.getId(), null, null, null);
         var m1 = findMascota(mascotas, "Max", d1);
         var m2 = findMascota(mascotas, "Luna", d1);
         var m3 = findMascota(mascotas, "Rocky", d1);
@@ -618,7 +651,7 @@ public class DataInitializer implements CommandLineRunner {
         var m21 = findMascota(mascotas, "Paco", d10);
         var m22 = findMascota(mascotas, "Mia", d10);
 
-        var veterinarios = veterinarioRepository.findAll();
+        var veterinarios = veterinarioRepository.search(demoClinic.getId(), null, null);
         var vetMap = new HashMap<String, Veterinario>();
         for (var v : veterinarios) vetMap.put(v.getEmail(), v);
         var v1 = vetMap.get("vet@petcare.com");
@@ -628,7 +661,7 @@ public class DataInitializer implements CommandLineRunner {
         var v5 = vetMap.get("maria.fernandez@petcare.com");
         var v6 = vetMap.get("jose.ramirez@petcare.com");
 
-        if (v1 == null || v2 == null) return;
+        if (v1 == null || v2 == null || v3 == null || v4 == null || v5 == null || v6 == null) return;
 
         var now = LocalDateTime.now();
         var citas = new ArrayList<Cita>();
@@ -674,6 +707,7 @@ public class DataInitializer implements CommandLineRunner {
 
         for (var cd : citaData) {
             var saved = citaRepository.save(Cita.builder()
+                    .clinica(demoClinic)
                     .duenio(cd.duenio).mascota(cd.mascota).veterinario(cd.veterinario)
                     .fecha(cd.fecha).horaInicio(cd.horaInicio).horaFin(cd.horaFin)
                     .duracionMinutos(cd.duracionMinutos).motivo(cd.motivo).estado(cd.estado)
@@ -798,8 +832,8 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         // === VACUNAS MASCOTA ===
-        var vacunasCatalogo = vacunaRepository.findAll();
-        var vacMap = new HashMap<String, Vacuna>();
+        var vacunasCatalogo = vacunaRepository.search(demoClinic.getId(), null, null);
+        var vacMap = new TreeMap<String, Vacuna>(String.CASE_INSENSITIVE_ORDER);
         for (var v : vacunasCatalogo) vacMap.put(v.getNombre(), v);
         var rCanina = vacMap.get("Rabia Canina");
         var mCanina = vacMap.get("Multiple Canina (Sextuple)");

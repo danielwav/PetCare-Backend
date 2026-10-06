@@ -32,37 +32,38 @@ public class VacunaController {
 
 	@PostMapping("/api/vacunas")
 	@ResponseStatus(HttpStatus.CREATED)
-	public VacunaResponse create(@Valid @RequestBody VacunaRequest request) {
-		return vacunaService.create(request);
+	public VacunaResponse create(@Valid @RequestBody VacunaRequest request, Authentication authentication) {
+		return vacunaService.create(request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/vacunas")
 	public List<VacunaResponse> findAll(
 			@RequestParam(required = false) String search,
-			@RequestParam(required = false) Boolean active
+			@RequestParam(required = false) Boolean active,
+			Authentication authentication
 	) {
-		return vacunaService.findAll(search, active);
+		return vacunaService.findAll(search, active, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@GetMapping("/api/vacunas/{id}")
-	public VacunaResponse findById(@PathVariable Long id) {
-		return vacunaService.findById(id);
+	public VacunaResponse findById(@PathVariable Long id, Authentication authentication) {
+		return vacunaService.findById(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PutMapping("/api/vacunas/{id}")
-	public VacunaResponse update(@PathVariable Long id, @Valid @RequestBody VacunaRequest request) {
-		return vacunaService.update(id, request);
+	public VacunaResponse update(@PathVariable Long id, @Valid @RequestBody VacunaRequest request, Authentication authentication) {
+		return vacunaService.update(id, request, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PatchMapping("/api/vacunas/{id}/activar")
-	public VacunaResponse activate(@PathVariable Long id) {
-		return vacunaService.activate(id);
+	public VacunaResponse activate(@PathVariable Long id, Authentication authentication) {
+		return vacunaService.activate(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@DeleteMapping("/api/vacunas/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void deactivate(@PathVariable Long id) {
-		vacunaService.deactivate(id);
+	public void deactivate(@PathVariable Long id, Authentication authentication) {
+		vacunaService.deactivate(id, clinicaService.resolveClinicaId(authentication.getName()));
 	}
 
 	@PostMapping("/api/mascotas/{id}/vacunas")

@@ -5,12 +5,14 @@ import com.petcare.backend.domain.dto.request.VacunaRequest;
 import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.dto.response.VacunaResponse;
 import com.petcare.backend.domain.repository.CitaRepository;
+import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.MascotaRepository;
 import com.petcare.backend.domain.repository.VacunaMascotaRepository;
 import com.petcare.backend.domain.repository.VacunaRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.domain.repository.VeterinarioRepository;
 import com.petcare.backend.persistence.entity.Cita;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Vacuna;
@@ -33,6 +35,7 @@ public class VacunaService {
 	private static final int DEFAULT_ALERT_DAYS = 30;
 
 	private final VacunaRepository vacunaRepository;
+	private final ClinicaRepository clinicaRepository;
 	private final VacunaMascotaRepository vacunaMascotaRepository;
 	private final MascotaRepository mascotaRepository;
 	private final VeterinarioRepository veterinarioRepository;
@@ -41,11 +44,14 @@ public class VacunaService {
 	private final UsuarioRepository usuarioRepository;
 
 	@Transactional
-	public VacunaResponse create(VacunaRequest request) {
-		validateUniqueName(request.nombre(), null);
+	public VacunaResponse create(VacunaRequest request, Long clinicaId) {
+		validateUniqueName(request.nombre(), null, clinicaId);
+		Clinica clinica = clinicaRepository.findById(clinicaId)
+				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
 
 		LocalDateTime now = LocalDateTime.now();
 		Vacuna vacuna = Vacuna.builder()
+				.clinica(clinica)
 				.nombre(normalizeText(request.nombre()))
 				.descripcion(normalizeText(request.descripcion()))
 				.intervaloProximaDosisDias(request.intervaloProximaDosisDias())
@@ -58,23 +64,23 @@ public class VacunaService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<VacunaResponse> findAll(String search, Boolean active) {
+	public List<VacunaResponse> findAll(String search, Boolean active, Long clinicaId) {
 		String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 		Boolean activeFilter = active == null ? true : active;
-		return vacunaRepository.search(normalizedSearch, activeFilter).stream()
+		return vacunaRepository.search(clinicaId, normalizedSearch, activeFilter).stream()
 				.map(this::toResponse)
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
-	public VacunaResponse findById(Long id) {
-		return toResponse(findVacuna(id));
+	public VacunaResponse findById(Long id, Long clinicaId) {
+		return toResponse(findVacuna(id, clinicaId));
 	}
 
 	@Transactional
-	public VacunaResponse update(Long id, VacunaRequest request) {
-		Vacuna vacuna = findVacuna(id);
-		validateUniqueName(request.nombre(), id);
+	public VacunaResponse update(Long id, VacunaRequest request, Long clinicaId) {
+		Vacuna vacuna = findVacuna(id, clinicaId);
+		validateUniqueName(request.nombre(), id, clinicaId);
 
 		vacuna.setNombre(normalizeText(request.nombre()));
 		vacuna.setDescripcion(normalizeText(request.descripcion()));
@@ -85,16 +91,16 @@ public class VacunaService {
 	}
 
 	@Transactional
-	public void deactivate(Long id) {
-		Vacuna vacuna = findVacuna(id);
+	public void deactivate(Long id, Long clinicaId) {
+		Vacuna vacuna = findVacuna(id, clinicaId);
 		vacuna.setActive(false);
 		vacuna.setUpdatedAt(LocalDateTime.now());
 		vacunaRepository.save(vacuna);
 	}
 
 	@Transactional
-	public VacunaResponse activate(Long id) {
-		Vacuna vacuna = findVacuna(id);
+	public VacunaResponse activate(Long id, Long clinicaId) {
+		Vacuna vacuna = findVacuna(id, clinicaId);
 		vacuna.setActive(true);
 		vacuna.setUpdatedAt(LocalDateTime.now());
 		return toResponse(vacunaRepository.save(vacuna));
@@ -121,10 +127,11 @@ public class VacunaService {
 		return registerForMascota(mascotaId, request, veterinarioId, clinicaId);
 	}
 
+	@Transactional
 	public VacunaMascotaResponse registerForMascota(Long mascotaId, VacunaMascotaRequest request, Long veterinarioId, Long clinicaId) {
 		Mascota mascota = findMascota(mascotaId);
 		validateMascotaBelongsToClinic(mascota, clinicaId);
-		Vacuna vacuna = findVacuna(request.vacunaId());
+		Vacuna vacuna = findVacuna(request.vacunaId(), mascota.getClinica().getId());
 		Veterinario veterinario = veterinarioId != null && veterinarioId > 0 ? findVeterinario(veterinarioId) : null;
 		if (veterinario != null) {
 			validateVeterinarioBelongsToClinic(veterinario, clinicaId);
@@ -220,6 +227,7 @@ public class VacunaService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public List<VacunaMascotaResponse> findAlertsForDuenio(Integer dias, String email) {
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
 		int days = dias == null ? DEFAULT_ALERT_DAYS : dias;
@@ -254,6 +262,7 @@ public class VacunaService {
 
 	private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String email) {
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		validateMascotaBelongsToClinic(mascota, duenio.getClinica().getId());
 		if (!mascota.getDuenio().getId().equals(duenio.getId())) {
 			throw new AccessDeniedException("No tienes permiso para consultar vacunas de esta mascota.");
 		}
@@ -303,9 +312,13 @@ public class VacunaService {
 				.orElseThrow(() -> new EntityNotFoundException("Mascota no encontrada."));
 	}
 
-	private Vacuna findVacuna(Long id) {
-		return vacunaRepository.findById(id)
+	private Vacuna findVacuna(Long id, Long clinicaId) {
+		Vacuna vacuna = vacunaRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Vacuna no encontrada."));
+		if (vacuna.getClinica() == null || !vacuna.getClinica().getId().equals(clinicaId)) {
+			throw new AccessDeniedException("La vacuna indicada no pertenece a tu clinica.");
+		}
+		return vacuna;
 	}
 
 	private Veterinario findVeterinario(Long id) {
@@ -313,9 +326,9 @@ public class VacunaService {
 				.orElseThrow(() -> new EntityNotFoundException("Veterinario no encontrado."));
 	}
 
-	private void validateUniqueName(String nombre, Long currentId) {
+	private void validateUniqueName(String nombre, Long currentId, Long clinicaId) {
 		String normalizedName = normalizeText(nombre);
-		vacunaRepository.findByNombreIgnoreCase(normalizedName)
+		vacunaRepository.findByNombreIgnoreCaseAndClinicaId(normalizedName, clinicaId)
 				.filter(vacuna -> currentId == null || !vacuna.getId().equals(currentId))
 				.ifPresent(vacuna -> {
 					throw new IllegalArgumentException("El nombre de la vacuna ya esta registrado.");

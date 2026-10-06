@@ -10,8 +10,8 @@ import java.util.Optional;
 
 public interface VacunaRepository extends JpaRepository<Vacuna, Long> {
 
-	Optional<Vacuna> findByNombreIgnoreCase(String nombre);
+	Optional<Vacuna> findByNombreIgnoreCaseAndClinicaId(String nombre, Long clinicaId);
 
-	@Query(value = "select v.* from vacunas v where (:active is null or v.active = :active) and (:search is null or upper(v.nombre) like upper('%' || :search || '%') or upper(v.descripcion) like upper('%' || :search || '%')) order by v.nombre asc", nativeQuery = true)
-	List<Vacuna> search(@Param("search") String search, @Param("active") Boolean active);
+	@Query(value = "select v.* from vacunas v where v.clinica_id = :clinicaId and (:active is null or v.active = :active) and (:search is null or upper(v.nombre) like upper('%' || :search || '%') or upper(v.descripcion) like upper('%' || :search || '%')) order by v.nombre asc", nativeQuery = true)
+	List<Vacuna> search(@Param("clinicaId") Long clinicaId, @Param("search") String search, @Param("active") Boolean active);
 }

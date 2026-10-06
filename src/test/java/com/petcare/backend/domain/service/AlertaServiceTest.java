@@ -97,12 +97,12 @@ class AlertaServiceTest {
 				"Rabia",
 				"Proteccion antirrabica.",
 				null
-		));
+		), clinicaId());
 		VacunaResponse moquillo = vacunaService.create(new VacunaRequest(
 				"Moquillo",
 				"Proteccion contra moquillo.",
 				null
-		));
+		), clinicaId());
 
 		vacunaService.registerForMascota(data.mascota().id(), new VacunaMascotaRequest(
 				rabia.id(),

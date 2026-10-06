@@ -3,6 +3,7 @@ package com.petcare.backend.web;
 import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.ServicioService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -14,9 +15,9 @@ public class TestServicioController {
     private final ClinicaService clinicaService;
 
     @GetMapping("/api/test-servicio")
-    public String test() {
+    public String test(Authentication authentication) {
         try {
-            var count = servicioService.findAll(null, null, clinicaService.getOrCreateDefaultClinic().getId()).size();
+            var count = servicioService.findAll(null, null, clinicaService.resolveClinicaId(authentication.getName())).size();
             return "ServicioService works. Count: " + count;
         } catch (Exception e) {
             return "Error: " + e.getClass().getName() + ": " + e.getMessage();

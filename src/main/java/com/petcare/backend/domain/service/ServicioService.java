@@ -133,9 +133,7 @@ public class ServicioService {
 	}
 
 	private Servicio findEntityById(Long id, Long clinicaId) {
-		return servicioRepository.findById(id)
-				.filter(servicio -> servicio.getClinica() != null
-						&& servicio.getClinica().getId().equals(clinicaId))
+		return servicioRepository.findByIdAndClinicaId(id, clinicaId)
 				.orElseThrow(() -> new AccessDeniedException("No tienes permiso para acceder a este servicio."));
 	}
 
