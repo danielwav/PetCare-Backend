@@ -10,19 +10,23 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect")
 @ActiveProfiles("test")
@@ -41,6 +45,58 @@ class DataInitializerTest {
     @Autowired private ServicioRepository servicioRepository;
     @Autowired private VacunaRepository vacunaRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+
+    @Test
+    void seedRequiresExplicitOptInInActualSpringContextsIncludingProduction() {
+        var runner = new ApplicationContextRunner()
+                .withUserConfiguration(DataInitializer.class)
+                .withBean(PasswordEncoder.class, () -> mock(PasswordEncoder.class));
+        for (var repository : List.of(RolRepository.class, UsuarioRepository.class, DuenioRepository.class,
+                VeterinarioRepository.class, AsistenteRepository.class, MascotaRepository.class,
+                ServicioRepository.class, VacunaRepository.class, CitaRepository.class,
+                AtencionClinicaRepository.class, InasistenciaRepository.class, DetalleCostoCitaRepository.class,
+                VacunaMascotaRepository.class, ControlMensualMascotaRepository.class,
+                HorarioVeterinarioRepository.class, ClinicaRepository.class)) {
+            runner = runner.withInitializer(ctx -> ctx.getBeanFactory()
+                    .registerSingleton(repository.getSimpleName(), mock(repository)));
+        }
+        runner.run(ctx -> assertThat(ctx).doesNotHaveBean(DataInitializer.class));
+        runner.withPropertyValues("spring.profiles.active=prod")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean(DataInitializer.class));
+        runner.withPropertyValues("app.seed-data.enabled=false", "spring.profiles.active=prod")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean(DataInitializer.class));
+        runner.withPropertyValues("app.seed-data.enabled=true")
+                .run(ctx -> assertThat(ctx).hasSingleBean(DataInitializer.class));
+        runner.withPropertyValues("app.seed-data.enabled=true", "spring.profiles.active=test")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean(DataInitializer.class));
+        runner.withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                        new SystemEnvironmentPropertySource("seed-env", Map.of("APP_SEED_DATA_ENABLED", "true"))))
+                .run(ctx -> assertThat(ctx).hasSingleBean(DataInitializer.class));
+    }
+
+    @Test
+    void explicitSeedCreatesUtcFourteenDayTrialAndNeverResetsExistingClinic() {
+        var before = LocalDateTime.now(ZoneOffset.UTC);
+        var initializer = beanFactory.createBean(DataInitializer.class);
+        initializer.run();
+        var demo = clinicaRepository.findBySlug("demo").orElseThrow();
+        assertThat(demo.getTrialStartedAt()).isBetween(before, LocalDateTime.now(ZoneOffset.UTC));
+        assertThat(demo.getCreatedAt()).isEqualTo(demo.getTrialStartedAt());
+        assertThat(demo.getTrialEndsAt()).isEqualTo(demo.getTrialStartedAt().plusDays(14));
+        var historicalStart = LocalDateTime.of(2020, 1, 1, 0, 0);
+        demo.setTrialStartedAt(historicalStart);
+        demo.setTrialEndsAt(historicalStart.plusDays(14));
+        clinicaRepository.saveAndFlush(demo);
+        initializer.run();
+        assertThat(demo.getTrialStartedAt()).isEqualTo(historicalStart);
+        assertThat(demo.getTrialEndsAt()).isEqualTo(historicalStart.plusDays(14));
+        demo.setPlan(PlanClinica.FREE);
+        clinicaRepository.saveAndFlush(demo);
+        initializer.run();
+        assertThat(demo.getPlan()).isEqualTo(PlanClinica.FREE);
+        assertThat(demo.getTrialStartedAt()).isEqualTo(historicalStart);
+        assertThat(demo.getTrialEndsAt()).isEqualTo(historicalStart.plusDays(14));
+    }
 
     @Test
     void startupSeedIsIdempotentAfterAnotherClinicAddsMatchingContactsAndCatalogNames() {

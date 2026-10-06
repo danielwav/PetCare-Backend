@@ -1,6 +1,8 @@
 package com.petcare.backend.domain.repository;
 
 import com.petcare.backend.persistence.entity.Clinica;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +16,10 @@ public interface ClinicaRepository extends JpaRepository<Clinica, Long> {
 	Optional<Clinica> findBySlug(String slug);
 
 	boolean existsBySlug(String slug);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select c from Clinica c where c.id = :id")
+	Optional<Clinica> findByIdForUpdate(@Param("id") Long id);
 
 	@Query("""
 			select c from Clinica c

@@ -84,6 +84,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.DELETE, "/api/duenios/**")
 						.hasAnyAuthority("ROLE_ADMIN", "ROLE_VETERINARIO", "ROLE_ASISTENTE")
 
+						.requestMatchers(HttpMethod.GET, "/api/clinicas/me/plan").hasAuthority("ROLE_ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/clinicas/me").authenticated()
 						.requestMatchers(HttpMethod.PUT, "/api/clinicas/me")
 						.hasAuthority("ROLE_ADMIN")

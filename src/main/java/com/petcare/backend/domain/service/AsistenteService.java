@@ -31,15 +31,17 @@ public class AsistenteService {
 	private final RolRepository rolRepository;
 	private final ClinicaRepository clinicaRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final PlanService planService;
 
 	@Transactional
 	public AsistenteResponse create(AsistenteRequest request, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		validateUniqueDocument(request.numeroDocumento(), null);
 
 		Usuario usuario = resolveUsuarioForCreate(request, clinicaId);
 		validateUsuarioBelongsToClinic(usuario, clinicaId);
 		validateUsuarioAvailable(usuario, null);
-		ensureAsistenteRole(usuario);
+		ensureAsistenteRole(usuario, clinicaId);
 		usuario = usuarioRepository.save(usuario);
 
 		Clinica clinica = clinicaRepository.findById(clinicaId)
@@ -80,13 +82,25 @@ public class AsistenteService {
 
 	@Transactional
 	public AsistenteResponse update(Long id, AsistenteRequest request, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		Asistente asistente = findEntityById(id, clinicaId);
 		validateUniqueDocument(request.numeroDocumento(), id);
 
 		Usuario usuario = resolveUsuarioForUpdate(request, asistente, clinicaId);
 		validateUsuarioBelongsToClinic(usuario, clinicaId);
 		validateUsuarioAvailable(usuario, id);
-		ensureAsistenteRole(usuario);
+		ensureAsistenteRole(usuario, clinicaId);
+		if (request.usuarioId() == null && asistente.getUsuario() != null) {
+			if (request.nombres() != null && !request.nombres().isBlank()) {
+				usuario.setFullName(fullName(request.nombres(), request.apellidos()));
+			}
+			if (request.email() != null && !request.email().isBlank()) {
+				usuario.setEmail(normalizeEmail(request.email()));
+			}
+			if (request.password() != null && !request.password().isBlank()) {
+				usuario.setPassword(passwordEncoder.encode(request.password()));
+			}
+		}
 		usuario = usuarioRepository.save(usuario);
 
 		asistente.setUsuario(usuario);
@@ -104,7 +118,15 @@ public class AsistenteService {
 
 	@Transactional
 	public AsistenteResponse activate(Long id, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		Asistente asistente = findEntityById(id, clinicaId);
+		Usuario usuario = asistente.getUsuario();
+		if (usuario != null) {
+			validateUsuarioBelongsToClinic(usuario, clinicaId);
+			if (!Boolean.TRUE.equals(usuario.getActive()) && hasStaffRole(usuario)) {
+				planService.assertStaffCapacity(clinicaId);
+			}
+		}
 		asistente.setActive(true);
 		asistente.setUpdatedAt(LocalDateTime.now());
 		if (asistente.getUsuario() != null) {
@@ -115,6 +137,7 @@ public class AsistenteService {
 
 	@Transactional
 	public void deactivate(Long id, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		Asistente asistente = findEntityById(id, clinicaId);
 		asistente.setActive(false);
 		asistente.setUpdatedAt(LocalDateTime.now());
@@ -156,21 +179,20 @@ public class AsistenteService {
 		if (usuario == null) {
 			return resolveUsuarioForCreate(request, clinicaId);
 		}
-		if (request.nombres() != null && !request.nombres().isBlank()) {
-			usuario.setFullName(fullName(request.nombres(), request.apellidos()));
-		}
-		if (request.email() != null && !request.email().isBlank()) {
-			usuario.setEmail(normalizeEmail(request.email()));
-		}
-		if (request.password() != null && !request.password().isBlank()) {
-			usuario.setPassword(passwordEncoder.encode(request.password()));
-		}
 		return usuario;
 	}
 
-	private void ensureAsistenteRole(Usuario usuario) {
+	private boolean hasStaffRole(Usuario usuario) {
+		return usuario.getRoles().stream().anyMatch(role -> role.getName() == RoleName.ROLE_ADMIN
+				|| role.getName() == RoleName.ROLE_VETERINARIO || role.getName() == RoleName.ROLE_ASISTENTE);
+	}
+
+	private void ensureAsistenteRole(Usuario usuario, Long clinicaId) {
 		Rol role = rolRepository.findByName(RoleName.ROLE_ASISTENTE)
 				.orElseThrow(() -> new IllegalStateException("Rol base no encontrado: " + RoleName.ROLE_ASISTENTE));
+		if (Boolean.TRUE.equals(usuario.getActive()) && !hasStaffRole(usuario)) {
+			planService.assertStaffCapacity(clinicaId);
+		}
 		usuario.getRoles().add(role);
 	}
 

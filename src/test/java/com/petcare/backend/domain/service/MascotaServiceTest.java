@@ -144,9 +144,8 @@ class MascotaServiceTest {
 
 	@Test
 	void duenioCanOnlyConsultOwnMascotas() {
-		authService.register(new RegisterRequest("Admin", "admin.mascota@test.com", "000000000", "secret123"));
-		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.mascota@test.com", "000000000", "secret123"));
-		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.mascota@test.com", "000000000", "secret123"));
+		AuthResponse ownerUser = authService.register(new RegisterRequest("Owner", "owner.mascota@test.com", "secret123", "000000000"));
+		AuthResponse otherUser = authService.register(new RegisterRequest("Other", "other.mascota@test.com", "secret123", "000000000"));
 		DuenioResponse owner = createDuenio("71000005", "owner.pet@test.com", ownerUser.user().id());
 		DuenioResponse otherOwner = createDuenio("71000006", "other.pet@test.com", otherUser.user().id());
 		MascotaResponse ownPet = createMascota(owner.id(), "Lola");
@@ -168,7 +167,7 @@ class MascotaServiceTest {
 	}
 
 	private DuenioResponse createDuenio(String documento, String email, Long usuarioId) {
-		return duenioService.create(new DuenioRequest(
+		DuenioRequest request = new DuenioRequest(
 				usuarioId,
 				"Nombre",
 				"Apellido",
@@ -177,7 +176,11 @@ class MascotaServiceTest {
 				"999555666",
 				email,
 				null
-		), clinicaId());
+		);
+		return usuarioId == null
+				? duenioService.create(request, clinicaId())
+				: duenioService.update(duenioService.findOwn(authService.meById(usuarioId).email()).id(),
+						request, clinicaId());
 	}
 
 	private MascotaResponse createMascota(Long duenioId, String nombre) {

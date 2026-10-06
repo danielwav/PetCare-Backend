@@ -4,6 +4,7 @@ import com.petcare.backend.domain.dto.request.HorarioVeterinarioRequest;
 import com.petcare.backend.domain.dto.request.VeterinarioRequest;
 import com.petcare.backend.domain.dto.response.DisponibilidadVeterinarioResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
+import com.petcare.backend.domain.repository.UsuarioRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +23,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class VeterinarioServiceTest {
+
+	@Autowired
+	private AuthService authService;
+
+	@Autowired
+	private UsuarioRepository usuarioRepository;
 
 	@Autowired
 	private VeterinarioService veterinarioService;
@@ -120,7 +127,7 @@ class VeterinarioServiceTest {
 	@Test
 	void rejectInvalidHorario() {
 		VeterinarioRequest request = new VeterinarioRequest(
-				null,
+				ServiceTestFixtures.veterinarioUser(authService, usuarioRepository, clinicaId(), "marco.vet@test.com"),
 				"Marco",
 				"Ruiz",
 				"CMVP-005",
@@ -141,7 +148,7 @@ class VeterinarioServiceTest {
 
 	private VeterinarioRequest baseRequest(String colegiatura, String email, String especialidad) {
 		return new VeterinarioRequest(
-				null,
+				ServiceTestFixtures.veterinarioUser(authService, usuarioRepository, clinicaId(), email),
 				"Ana",
 				"Salas",
 				colegiatura,

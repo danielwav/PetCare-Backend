@@ -1,6 +1,9 @@
 package com.petcare.backend.web;
 
 import com.petcare.backend.domain.dto.response.ErrorResponse;
+import com.petcare.backend.domain.service.PlanException;
+import org.springframework.http.ResponseEntity;
+import java.util.Map;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -16,6 +19,14 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+	@ExceptionHandler(PlanException.class)
+	ResponseEntity<Map<String, Object>> handlePlan(PlanException exception, HttpServletRequest request) {
+		return ResponseEntity.status(exception.getStatus()).body(Map.of(
+				"timestamp", LocalDateTime.now(java.time.Clock.systemUTC()),
+				"status", exception.getStatus().value(), "error", exception.getStatus().getReasonPhrase(),
+				"code", exception.getCode(), "message", exception.getMessage(), "path", request.getRequestURI()));
+	}
 
 	@ExceptionHandler(IllegalArgumentException.class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

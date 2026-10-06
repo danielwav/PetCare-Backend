@@ -44,6 +44,21 @@ to 100 characters. The response contains `items`, `page`, `totalPages`, and
 Individual profiles and service prices remain available at
 `/api/public/clinicas/{slug}` and `/api/public/clinicas/{slug}/servicios`.
 
+### P3 Plans And Trials
+
+Before deploying P3, follow [the trial migration runbook](scripts/p3-migration.md).
+New clinics receive a server-controlled 14-day PRO trial with 5 active staff
+accounts and 2,500 active pets. CONSULTORIO supports 2 staff / 500 pets; PRO
+supports 5 / 2,500. Owner-only accounts do not consume staff seats; accounts with
+multiple staff roles count once. Quota increases are serialized by a clinic lock.
+Expired trials and FREE clinics retain reads but reject operational writes.
+Existing accounts and histories are never deleted to satisfy a limit.
+
+Admins can inspect usage and expiry at `GET /api/clinicas/me/plan` and `/mi-plan`
+in the frontend. Prices are references only; payment and self-service paid-plan
+activation are not implemented. Keep `APP_SEED_DATA_ENABLED=false` in production:
+demo loading is now opt-in, while role initialization remains enabled.
+
 ### AWS (Producción actual)
 
 - **Backend API**: `https://d1eq863qpgnni5.cloudfront.net/api`

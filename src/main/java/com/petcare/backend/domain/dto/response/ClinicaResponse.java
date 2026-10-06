@@ -13,6 +13,9 @@ public record ClinicaResponse(
 		String horarioAtencion,
 		String descripcion,
 		String logoUrl,
-		LocalDateTime createdAt
+		LocalDateTime createdAt,
+		LocalDateTime trialStartedAt,
+		LocalDateTime trialEndsAt,
+		boolean readOnly
 ) {
 }

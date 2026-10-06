@@ -65,4 +65,10 @@ public class Clinica {
 
 	@Column(nullable = false)
 	private LocalDateTime updatedAt;
+
+	@Column(name = "trial_started_at")
+	private LocalDateTime trialStartedAt;
+
+	@Column(name = "trial_ends_at")
+	private LocalDateTime trialEndsAt;
 }

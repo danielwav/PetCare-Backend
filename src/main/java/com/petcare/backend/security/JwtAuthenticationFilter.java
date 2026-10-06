@@ -39,10 +39,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			try {
 				String subject = jwtService.extractSubject(token);
 				UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
-				UsernamePasswordAuthenticationToken authentication =
-						new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-				SecurityContextHolder.getContext().setAuthentication(authentication);
+				if (userDetails.isEnabled()) {
+					UsernamePasswordAuthenticationToken authentication =
+							new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+					authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+					SecurityContextHolder.getContext().setAuthentication(authentication);
+				}
 			} catch (UsernameNotFoundException e) {
 				// Token válido pero usuario ya no existe (ej: DB reseteada, email cambiado).
 				// Intentar buscar por userId del token
@@ -50,10 +52,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 					Long userId = jwtService.extractUserId(token);
 					if (userId != null) {
 						UserDetails userDetails = userDetailsService.loadUserById(userId);
-						UsernamePasswordAuthenticationToken authentication =
-								new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-						authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-						SecurityContextHolder.getContext().setAuthentication(authentication);
+						if (userDetails.isEnabled()) {
+							UsernamePasswordAuthenticationToken authentication =
+									new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+							authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+							SecurityContextHolder.getContext().setAuthentication(authentication);
+						}
 					}
 				} catch (Exception ex) {
 					// No se pudo autenticar con userId

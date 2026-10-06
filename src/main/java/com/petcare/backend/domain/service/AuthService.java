@@ -20,6 +20,7 @@ import com.petcare.backend.persistence.enums.EstadoClinica;
 import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.security.JwtProperties;
 import com.petcare.backend.security.JwtService;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -52,6 +53,8 @@ public class AuthService {
 	private final JwtProperties jwtProperties;
 	private final EmailService emailService;
 	private final ClinicaService clinicaService;
+	private final PlanService planService;
+	private final EntityManager entityManager;
 
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
@@ -65,6 +68,7 @@ public class AuthService {
 				.orElseThrow(() -> new IllegalStateException("Rol base no encontrado: " + roleName));
 
 		Clinica clinica = resolveRegisterClinic(request.clinicaSlug());
+		planService.assertCanWrite(clinica.getId());
 
 		Usuario usuario = Usuario.builder()
 				.fullName(request.fullName())
@@ -146,6 +150,7 @@ public class AuthService {
 
 	@Transactional
 	public Map<String, String> createInternalUser(CreateInternalUserRequest request, Long clinicaId) {
+		planService.assertCanWrite(clinicaId);
 		String email = request.email().toLowerCase();
 		if (usuarioRepository.existsByEmail(email)) {
 			throw new IllegalArgumentException("El correo ya esta registrado.");
@@ -168,6 +173,9 @@ public class AuthService {
 
 		Clinica clinica = clinicaRepository.findById(clinicaId)
 				.orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
+		if (roleName == RoleName.ROLE_VETERINARIO || roleName == RoleName.ROLE_ASISTENTE) {
+			planService.assertStaffCapacity(clinicaId);
+		}
 
 		String temporaryPassword = generateSecurePassword();
 		String fullName = request.nombres() + " " + request.apellidos();
@@ -263,6 +271,14 @@ public class AuthService {
 		Usuario usuario = usuarioRepository.findByActivationToken(token)
 				.orElseThrow(() -> new IllegalArgumentException("Token de activacion invalido."));
 
+		Long clinicaId = usuario.getClinica() != null ? usuario.getClinica().getId() : null;
+		planService.lockForWrite(clinicaId);
+		// The token lookup preceded the lock; refresh active state, token and eager roles.
+		entityManager.refresh(usuario);
+		if (!token.equals(usuario.getActivationToken())) {
+			throw new IllegalArgumentException("Token de activacion invalido.");
+		}
+
 		if (usuario.getTokenExpiry() == null || usuario.getTokenExpiry().isBefore(LocalDateTime.now())) {
 			throw new IllegalArgumentException("El token de activacion ha expirado.");
 		}
@@ -275,6 +291,10 @@ public class AuthService {
 			throw new IllegalArgumentException("La contrasena debe tener al menos 8 caracteres.");
 		}
 
+		if (usuario.getRoles().stream().anyMatch(role -> role.getName() == RoleName.ROLE_ADMIN
+				|| role.getName() == RoleName.ROLE_VETERINARIO || role.getName() == RoleName.ROLE_ASISTENTE)) {
+			planService.assertStaffCapacity(clinicaId);
+		}
 		usuario.setPassword(passwordEncoder.encode(password));
 		usuario.setActive(true);
 		usuario.setActivationToken(null);

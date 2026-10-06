@@ -23,6 +23,7 @@ import com.petcare.backend.domain.dto.response.VacunaMascotaResponse;
 import com.petcare.backend.domain.dto.response.VacunaResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
 import com.petcare.backend.domain.repository.CitaRepository;
+import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.domain.repository.InasistenciaRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.enums.EstadoCita;
@@ -47,6 +48,12 @@ import static org.mockito.Mockito.mock;
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class ReporteServiceTest {
+
+	@Autowired
+	private AuthService authService;
+
+	@Autowired
+	private UsuarioRepository usuarioRepository;
 
 	@Autowired
 	private ReporteService reporteService;
@@ -186,7 +193,7 @@ class ReporteServiceTest {
 				null
 		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
-				null,
+				ServiceTestFixtures.veterinarioUser(authService, usuarioRepository, clinicaId(), "ana.vet@test.com"),
 				"Ana",
 				"Salas",
 				"CMVP-001",

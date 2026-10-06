@@ -3,6 +3,8 @@ package com.petcare.backend.web;
 import com.petcare.backend.domain.dto.request.UpdateClinicaRequest;
 import com.petcare.backend.domain.dto.response.ClinicaResponse;
 import com.petcare.backend.domain.service.ClinicaService;
+import com.petcare.backend.domain.service.PlanService;
+import com.petcare.backend.domain.dto.response.PlanResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -18,6 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClinicaController {
 
 	private final ClinicaService clinicaService;
+	private final PlanService planService;
+
+	@GetMapping("/me/plan")
+	public PlanResponse plan(Authentication authentication) {
+		return planService.getMyPlan(authentication.getName());
+	}
 
 	@GetMapping("/me")
 	public ClinicaResponse me(Authentication authentication) {

@@ -26,6 +26,7 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
+    private final PlanService planService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -42,6 +43,7 @@ public class UsuarioService {
 
     @Transactional
     public UserResponse update(Long id, UpdateUserRequest request, Long clinicaId) {
+        planService.assertCanWrite(clinicaId);
         Usuario usuario = findUsuario(id, clinicaId);
         String email = request.email().toLowerCase();
         if (!usuario.getEmail().equals(email) && usuarioRepository.existsByEmail(email)) {
@@ -55,6 +57,7 @@ public class UsuarioService {
 
     @Transactional
     public void hardDelete(Long id, Long clinicaId) {
+        planService.assertCanWrite(clinicaId);
         Usuario usuario = findUsuario(id, clinicaId);
         entityManager.createNativeQuery("UPDATE duenios SET usuario_id = NULL WHERE usuario_id = :id")
                 .setParameter("id", id).executeUpdate();
@@ -69,13 +72,18 @@ public class UsuarioService {
 
     @Transactional
     public UserResponse toggleActive(Long id, Long clinicaId) {
+        planService.lockForWrite(clinicaId);
         Usuario usuario = findUsuario(id, clinicaId);
+        if (!Boolean.TRUE.equals(usuario.getActive()) && hasStaffRole(usuario.getRoles())) {
+            planService.assertStaffCapacity(clinicaId);
+        }
         usuario.setActive(!usuario.getActive());
         return toUserResponse(usuarioRepository.save(usuario));
     }
 
     @Transactional
     public UserResponse updateRoles(Long id, UpdateUserRolesRequest request, Long clinicaId) {
+        planService.lockForWrite(clinicaId);
         Usuario usuario = findUsuario(id, clinicaId);
         Set<Rol> roles = request.roles().stream()
                 .map(roleName -> {
@@ -90,6 +98,9 @@ public class UsuarioService {
                 .collect(Collectors.toSet());
         if (roles.isEmpty()) {
             throw new IllegalArgumentException("Debe asignar al menos un rol.");
+        }
+        if (Boolean.TRUE.equals(usuario.getActive()) && !hasStaffRole(usuario.getRoles()) && hasStaffRole(roles)) {
+            planService.assertStaffCapacity(clinicaId);
         }
         usuario.setRoles(roles);
         return toUserResponse(usuarioRepository.save(usuario));
@@ -106,6 +117,11 @@ public class UsuarioService {
             throw new org.springframework.security.access.AccessDeniedException("No tienes permiso para acceder a este usuario.");
         }
         return usuario;
+    }
+
+    private boolean hasStaffRole(Set<Rol> roles) {
+        return roles.stream().anyMatch(role -> role.getName() == RoleName.ROLE_ADMIN
+                || role.getName() == RoleName.ROLE_VETERINARIO || role.getName() == RoleName.ROLE_ASISTENTE);
     }
 
     private UserResponse toUserResponse(Usuario usuario) {

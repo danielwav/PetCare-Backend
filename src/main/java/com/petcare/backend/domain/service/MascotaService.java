@@ -29,11 +29,14 @@ public class MascotaService {
 	private final DuenioRepository duenioRepository;
 	private final CitaRepository citaRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
+	private final PlanService planService;
 
 	@Transactional
 	public MascotaResponse create(MascotaRequest request, Long clinicaId) {
+		planService.assertCanWrite(clinicaId);
 		Duenio duenio = findActiveDuenioById(request.duenioId());
 		validateDuenioBelongsToClinic(duenio, clinicaId);
+		planService.assertPetCapacity(clinicaId);
 		LocalDateTime now = LocalDateTime.now();
 
 		Mascota mascota = Mascota.builder()
@@ -121,6 +124,7 @@ public class MascotaService {
 
 	@Transactional
 	public MascotaResponse update(Long id, MascotaRequest request, Long clinicaId) {
+		planService.assertCanWrite(clinicaId);
 		Mascota mascota = findEntityById(id, clinicaId);
 		Duenio duenio = findActiveDuenioById(request.duenioId());
 		validateDuenioBelongsToClinic(duenio, clinicaId);
@@ -146,6 +150,7 @@ public class MascotaService {
 		Mascota mascota = findEntityById(id);
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
 		validateOwnedMascota(mascota, duenio);
+		planService.assertCanWrite(duenio.getClinica().getId());
 		mascota.setNombre(normalizeText(request.nombre()));
 		mascota.setEspecie(normalizeText(request.especie()));
 		mascota.setRaza(normalizeText(request.raza()));
@@ -164,6 +169,7 @@ public class MascotaService {
 		Mascota mascota = findEntityById(id);
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
 		validateOwnedMascota(mascota, duenio);
+		planService.assertCanWrite(duenio.getClinica().getId());
 		cancelFutureCitas(id);
 		mascota.setActive(false);
 		mascota.setUpdatedAt(LocalDateTime.now());
@@ -172,6 +178,7 @@ public class MascotaService {
 
 	@Transactional
 	public void deactivate(Long id, Long clinicaId) {
+		planService.assertCanWrite(clinicaId);
 		Mascota mascota = findEntityById(id, clinicaId);
 		cancelFutureCitas(id);
 		mascota.setActive(false);

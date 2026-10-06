@@ -10,12 +10,13 @@ import com.petcare.backend.persistence.enums.EstadoClinica;
 import com.petcare.backend.persistence.enums.PlanClinica;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.Locale;
 
 @Service
@@ -26,6 +27,8 @@ public class ClinicaService {
 
 	private final ClinicaRepository clinicaRepository;
 	private final UsuarioRepository usuarioRepository;
+	private final Clock clock;
+	private final PlanService planService;
 
 	@Transactional
 	public Clinica createClinic(String nombre, String slug) {
@@ -33,12 +36,14 @@ public class ClinicaService {
 		if (clinicaRepository.existsBySlug(normalizedSlug)) {
 			throw new IllegalArgumentException("Ya existe una clinica con ese slug.");
 		}
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
 		return clinicaRepository.save(Clinica.builder()
 				.nombre(nombre)
 				.slug(normalizedSlug)
 				.plan(PlanClinica.TRIAL)
 				.estado(EstadoClinica.ACTIVA)
+				.trialStartedAt(now)
+				.trialEndsAt(now.plusDays(14))
 				.createdAt(now)
 				.updatedAt(now)
 				.build());
@@ -52,21 +57,19 @@ public class ClinicaService {
 
 	@Transactional(readOnly = true)
 	public ClinicaResponse getMyClinic(String email) {
-		return toResponse(findMyClinic(email));
+		return toResponse(findMyClinic(email), clock);
 	}
 
 	@Transactional(readOnly = true)
 	public Long resolveClinicaId(String email) {
 		Clinica clinica = findMyClinic(email.toLowerCase(Locale.ROOT));
-		if (clinica.getEstado() != EstadoClinica.ACTIVA) {
-			throw new AccessDeniedException("La clinica no esta activa.");
-		}
 		return clinica.getId();
 	}
 
 	@Transactional
 	public ClinicaResponse updateMyClinic(String email, UpdateClinicaRequest request) {
 		Clinica clinica = findMyClinic(email);
+		planService.assertCanWrite(clinica.getId());
 		String slug = request.slug().toLowerCase(Locale.ROOT);
 		if (!slug.equals(clinica.getSlug()) && clinicaRepository.existsBySlug(slug)) {
 			throw new IllegalArgumentException("Ya existe una clinica con ese slug.");
@@ -78,8 +81,8 @@ public class ClinicaService {
 		clinica.setHorarioAtencion(blankToNull(request.horarioAtencion()));
 		clinica.setDescripcion(blankToNull(request.descripcion()));
 		clinica.setLogoUrl(blankToNull(request.logoUrl()));
-		clinica.setUpdatedAt(LocalDateTime.now());
-		return toResponse(clinicaRepository.save(clinica));
+		clinica.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+		return toResponse(clinicaRepository.save(clinica), clock);
 	}
 
 	@Transactional(readOnly = true)
@@ -103,6 +106,10 @@ public class ClinicaService {
 	}
 
 	public static ClinicaResponse toResponse(Clinica clinica) {
+		return toResponse(clinica, Clock.systemUTC());
+	}
+
+	public static ClinicaResponse toResponse(Clinica clinica, Clock clock) {
 		return new ClinicaResponse(
 				clinica.getId(),
 				clinica.getNombre(),
@@ -114,7 +121,10 @@ public class ClinicaService {
 				clinica.getHorarioAtencion(),
 				clinica.getDescripcion(),
 				clinica.getLogoUrl(),
-				clinica.getCreatedAt()
+				clinica.getCreatedAt(),
+				clinica.getTrialStartedAt(),
+				clinica.getTrialEndsAt(),
+				PlanService.isReadOnly(clinica, clock)
 		);
 	}
 

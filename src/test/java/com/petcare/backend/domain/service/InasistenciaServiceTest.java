@@ -15,6 +15,7 @@ import com.petcare.backend.domain.dto.response.MascotaResponse;
 import com.petcare.backend.domain.dto.response.ServicioResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
 import com.petcare.backend.domain.repository.CitaRepository;
+import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.SexoMascota;
@@ -37,6 +38,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class InasistenciaServiceTest {
+
+	@Autowired
+	private AuthService authService;
+
+	@Autowired
+	private UsuarioRepository usuarioRepository;
 
 	@Autowired
 	private InasistenciaService inasistenciaService;
@@ -152,7 +159,7 @@ class InasistenciaServiceTest {
 				null
 		), clinicaId());
 		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
-				null,
+				ServiceTestFixtures.veterinarioUser(authService, usuarioRepository, clinicaId(), "ana.vet@test.com"),
 				"Ana",
 				"Salas",
 				"CMVP-001",

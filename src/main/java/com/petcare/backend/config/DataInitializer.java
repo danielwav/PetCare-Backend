@@ -9,6 +9,7 @@ import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.persistence.enums.SexoMascota;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -19,10 +20,12 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 @Component
 @Profile("!test")
+@ConditionalOnProperty(name = "app.seed-data.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
@@ -82,11 +85,13 @@ public class DataInitializer implements CommandLineRunner {
 
     private Clinica defaultClinica() {
         return clinicaRepository.findBySlug("demo").orElseGet(() -> {
-            var now = LocalDateTime.now();
+            var now = LocalDateTime.now(ZoneOffset.UTC);
             return clinicaRepository.save(Clinica.builder()
                     .nombre("Clínica Demo")
                     .slug("demo")
                     .plan(PlanClinica.TRIAL)
+                    .trialStartedAt(now)
+                    .trialEndsAt(now.plusDays(14))
                     .estado(EstadoClinica.ACTIVA)
                     .createdAt(now)
                     .updatedAt(now)
