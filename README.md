@@ -59,6 +59,36 @@ in the frontend. Prices are references only; payment and self-service paid-plan
 activation are not implemented. Keep `APP_SEED_DATA_ENABLED=false` in production:
 demo loading is now opt-in, while role initialization remains enabled.
 
+### P4 SaaS Operations
+
+The separate `/saas/clinicas` frontend workspace and `/api/saas/clinicas` API
+require `ROLE_SAAS_OPERATOR`. Operators must have one active role, no clinic,
+and complete their initial password change before accessing SaaS operations.
+Clinic administrators cannot create, assign, or manage this global role, and
+operators cannot access clinical APIs.
+
+Follow [the P4 migration and provisioning runbook](scripts/p4-migration.md)
+before enabling access. It includes the explicit PostgreSQL migration,
+new-account-only provisioning, runtime privilege requirements and revocation.
+The `prod` profile requires an explicit `JWT_SECRET`, without a development
+fallback. No operator credentials are seeded or included in the repository.
+
+Operators can search/paginate clinics, assign CONSULTORIO or PRO, independently
+suspend/reactivate a clinic, and inspect its paginated audit history. Changes
+require a trimmed reason of 5-500 characters. The actor, timestamp, reason and
+before/after values are persisted atomically with each change; the migration
+protects audit rows against UPDATE, DELETE and TRUNCATE. No-op changes return
+409 without creating a misleading audit entry.
+
+A capacity reduction returns 409 when current usage exceeds the target limits.
+TRIAL-to-PRO retains the same capacity, so grandfathered excess records remain;
+new additions stay blocked until usage is below the limit. No users, pets or
+histories are removed automatically. Trial timestamps never reset. Profile
+edits, capacity changes and SaaS mutations share an authoritative clinic lock
+to prevent stale writes from undoing plan/state changes. Suspension does not
+cancel an unrelated clinical write already in flight. Payments, automatic
+renewal and self-service activation are not part of P4.
+
 ### AWS (Producción actual)
 
 - **Backend API**: `https://d1eq863qpgnni5.cloudfront.net/api`

@@ -9,6 +9,7 @@ import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
+import com.petcare.backend.security.SaasOperatorPolicy;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class UsuarioService {
 
     public List<UserResponse> findAll(Long clinicaId) {
         return usuarioRepository.findAllByClinicaId(clinicaId).stream()
+                .filter(usuario -> !SaasOperatorPolicy.hasOperatorRole(usuario))
                 .map(this::toUserResponse)
                 .toList();
     }
@@ -89,6 +91,10 @@ public class UsuarioService {
                 .map(roleName -> {
                     try {
                         RoleName rn = RoleName.valueOf(roleName);
+                        if (!Set.of(RoleName.ROLE_ADMIN, RoleName.ROLE_VETERINARIO,
+                                RoleName.ROLE_ASISTENTE, RoleName.ROLE_DUENIO).contains(rn)) {
+                            throw new IllegalArgumentException("Rol invalido: " + roleName);
+                        }
                         return rolRepository.findByName(rn)
                                 .orElseThrow(() -> new IllegalArgumentException("Rol no encontrado: " + roleName));
                     } catch (IllegalArgumentException e) {
@@ -107,8 +113,12 @@ public class UsuarioService {
     }
 
     public Usuario findUsuario(Long id) {
-        return usuarioRepository.findById(id)
+        Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con id: " + id));
+        if (SaasOperatorPolicy.hasOperatorRole(usuario)) {
+            throw new org.springframework.security.access.AccessDeniedException("No puedes acceder a un operador SaaS desde aqui.");
+        }
+        return usuario;
     }
 
     public Usuario findUsuario(Long id, Long clinicaId) {

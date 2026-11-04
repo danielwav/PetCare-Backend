@@ -1,6 +1,7 @@
 package com.petcare.backend.config;
 
 import com.petcare.backend.security.JwtAuthenticationFilter;
+import com.petcare.backend.security.SaasOperatorAccessFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +30,7 @@ public class SecurityConfig {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+						.requestMatchers("/api/saas", "/api/saas/**").hasAuthority("ROLE_SAAS_OPERATOR")
 						.requestMatchers(
 								"/api/activate-account",
 								"/api/health",
@@ -91,6 +93,7 @@ public class SecurityConfig {
 
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+				.addFilterAfter(new SaasOperatorAccessFilter(), JwtAuthenticationFilter.class)
 				.build();
 	}
 

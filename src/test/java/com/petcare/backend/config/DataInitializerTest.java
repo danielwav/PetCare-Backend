@@ -79,6 +79,8 @@ class DataInitializerTest {
         var before = LocalDateTime.now(ZoneOffset.UTC);
         var initializer = beanFactory.createBean(DataInitializer.class);
         initializer.run();
+        assertThat(usuarioRepository.findAll()).noneMatch(user -> user.getRoles().stream()
+                .anyMatch(role -> role.getName() == RoleName.ROLE_SAAS_OPERATOR));
         var demo = clinicaRepository.findBySlug("demo").orElseThrow();
         assertThat(demo.getTrialStartedAt()).isBetween(before, LocalDateTime.now(ZoneOffset.UTC));
         assertThat(demo.getCreatedAt()).isEqualTo(demo.getTrialStartedAt());
@@ -199,6 +201,26 @@ class DataInitializerTest {
                 .allSatisfy(assistant -> assertThat(assistant.getUsuario()).isNull());
         assertThat(duenioRepository.findById(foreignOwner.getId()).orElseThrow().getUsuario().getId())
                 .isEqualTo(usuarioRepository.findByEmail("duenio@petcare.com").orElseThrow().getId());
+    }
+
+    @Test
+    void demoSeedNeverReassignsOrResetsAnExistingOperatorWithDemoEmail() {
+        var role = rolRepository.findByName(RoleName.ROLE_SAAS_OPERATOR).orElseThrow();
+        var operator = usuarioRepository.saveAndFlush(Usuario.builder().email("admin@petcare.com")
+                .fullName("Existing Operator").password(passwordEncoder.encode("operator-secret"))
+                .active(false).forcePasswordChange(true).createdAt(LocalDateTime.now()).roles(Set.of(role)).build());
+        Long id = operator.getId();
+        String password = operator.getPassword();
+        beanFactory.createBean(DataInitializer.class).run();
+        entityManager.flush();
+        entityManager.clear();
+        var saved = usuarioRepository.findById(id).orElseThrow();
+        assertThat(saved.getClinica()).isNull();
+        assertThat(saved.getFullName()).isEqualTo("Existing Operator");
+        assertThat(saved.getPassword()).isEqualTo(password);
+        assertThat(saved.getActive()).isFalse();
+        assertThat(saved.getForcePasswordChange()).isTrue();
+        assertThat(saved.getRoles()).extracting(Rol::getName).containsExactly(RoleName.ROLE_SAAS_OPERATOR);
     }
 
     private Clinica clinic(String slug) {

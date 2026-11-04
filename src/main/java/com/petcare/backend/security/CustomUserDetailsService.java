@@ -35,8 +35,10 @@ public class CustomUserDetailsService implements UserDetailsService {
 		return User.builder()
 				.username(usuario.getEmail())
 				.password(usuario.getPassword())
-				.disabled(!usuario.getActive())
+				.disabled(!Boolean.TRUE.equals(usuario.getActive())
+						|| usuario.getRoles().stream().noneMatch(role -> Boolean.TRUE.equals(role.getActive())))
 				.authorities(usuario.getRoles().stream()
+						.filter(role -> Boolean.TRUE.equals(role.getActive()))
 						.map(role -> new SimpleGrantedAuthority(role.getName().name()))
 						.toList())
 				.build();

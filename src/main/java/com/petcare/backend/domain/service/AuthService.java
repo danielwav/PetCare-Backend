@@ -20,6 +20,8 @@ import com.petcare.backend.persistence.enums.EstadoClinica;
 import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.security.JwtProperties;
 import com.petcare.backend.security.JwtService;
+import com.petcare.backend.security.JwtIdentityService;
+import com.petcare.backend.security.SaasOperatorPolicy;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,7 @@ public class AuthService {
 
 	private final AuthenticationManager authenticationManager;
 	private final JwtService jwtService;
+	private final JwtIdentityService jwtIdentityService;
 	private final PasswordEncoder passwordEncoder;
 	private final RolRepository rolRepository;
 	private final UsuarioRepository usuarioRepository;
@@ -129,10 +132,7 @@ public class AuthService {
 		if (!jwtService.isValidRefreshToken(request.refreshToken())) {
 			throw new IllegalArgumentException("Refresh token invalido o expirado.");
 		}
-		Usuario usuario = findByEmail(jwtService.extractSubject(request.refreshToken()));
-		if (!usuario.getActive()) {
-			throw new UsernameNotFoundException("Usuario inactivo.");
-		}
+		Usuario usuario = jwtIdentityService.resolve(request.refreshToken());
 		return buildAuthResponse(usuario);
 	}
 
@@ -156,7 +156,7 @@ public class AuthService {
 			throw new IllegalArgumentException("El correo ya esta registrado.");
 		}
 
-		String roleStr = request.rol().toUpperCase();
+		String roleStr = request.rol().toUpperCase(Locale.ROOT);
 		RoleName roleName;
 		try {
 			roleName = RoleName.valueOf("ROLE_" + roleStr);
@@ -164,7 +164,7 @@ public class AuthService {
 			throw new IllegalArgumentException("Rol invalido. Use VETERINARIO, ASISTENTE o DUENIO.");
 		}
 
-		if (roleName == RoleName.ROLE_ADMIN) {
+		if (!Set.of(RoleName.ROLE_VETERINARIO, RoleName.ROLE_ASISTENTE, RoleName.ROLE_DUENIO).contains(roleName)) {
 			throw new IllegalArgumentException("No puedes asignar este rol desde aqui.");
 		}
 
@@ -206,6 +206,7 @@ public class AuthService {
 	@Transactional
 	public void changePassword(String email, String currentPassword, String newPassword) {
 		Usuario usuario = findByEmail(email);
+		SaasOperatorPolicy.assertValidAccount(usuario);
 
 		if (!passwordEncoder.matches(currentPassword, usuario.getPassword())) {
 			throw new IllegalArgumentException("La contrasena actual es incorrecta.");
@@ -254,6 +255,9 @@ public class AuthService {
 		if (usuario == null) {
 			return Map.of("valid", false, "reason", "INVALID_TOKEN");
 		}
+		if (SaasOperatorPolicy.hasOperatorRole(usuario)) {
+			return Map.of("valid", false, "reason", "INVALID_TOKEN");
+		}
 
 		if (usuario.getTokenExpiry() == null || usuario.getTokenExpiry().isBefore(LocalDateTime.now())) {
 			return Map.of("valid", false, "reason", "EXPIRED_TOKEN");
@@ -270,11 +274,17 @@ public class AuthService {
 	public void activateWithToken(String token, String password) {
 		Usuario usuario = usuarioRepository.findByActivationToken(token)
 				.orElseThrow(() -> new IllegalArgumentException("Token de activacion invalido."));
+		if (SaasOperatorPolicy.hasOperatorRole(usuario)) {
+			throw new org.springframework.security.access.AccessDeniedException("No se puede activar un operador SaaS desde aqui.");
+		}
 
 		Long clinicaId = usuario.getClinica() != null ? usuario.getClinica().getId() : null;
 		planService.lockForWrite(clinicaId);
 		// The token lookup preceded the lock; refresh active state, token and eager roles.
 		entityManager.refresh(usuario);
+		if (SaasOperatorPolicy.hasOperatorRole(usuario)) {
+			throw new org.springframework.security.access.AccessDeniedException("No se puede activar un operador SaaS desde aqui.");
+		}
 		if (!token.equals(usuario.getActivationToken())) {
 			throw new IllegalArgumentException("Token de activacion invalido.");
 		}
@@ -367,7 +377,9 @@ public class AuthService {
 	}
 
 	private UserResponse toUserResponse(Usuario usuario) {
+		SaasOperatorPolicy.assertValidAccount(usuario);
 		Set<String> roles = usuario.getRoles().stream()
+				.filter(role -> Boolean.TRUE.equals(role.getActive()))
 				.map(role -> role.getName().name())
 				.collect(Collectors.toSet());
 
@@ -385,6 +397,10 @@ public class AuthService {
 	}
 
 	private AuthResponse buildAuthResponse(Usuario usuario) {
+		SaasOperatorPolicy.assertValidAccount(usuario);
+		if (!Boolean.TRUE.equals(usuario.getActive())) {
+			throw new UsernameNotFoundException("Usuario inactivo.");
+		}
 		String accessToken = jwtService.generateAccessToken(usuario.getEmail(), usuario.getId());
 		String refreshToken = jwtService.generateRefreshToken(usuario.getEmail(), usuario.getId());
 		return new AuthResponse(

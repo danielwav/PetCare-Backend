@@ -9,13 +9,18 @@ import com.petcare.backend.domain.dto.response.DuenioResponse;
 import com.petcare.backend.domain.dto.response.UserResponse;
 import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.DuenioRepository;
+import com.petcare.backend.domain.repository.RolRepository;
+import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.enums.EstadoClinica;
+import com.petcare.backend.persistence.enums.RoleName;
 import com.petcare.backend.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +47,25 @@ class AuthServiceTest {
 
 	@Autowired
 	private DuenioRepository duenioRepository;
+
+	@Autowired private UsuarioRepository usuarioRepository;
+	@Autowired private RolRepository rolRepository;
+
+	@Test
+	void sessionResponsesOnlyAdvertiseActiveRoles() {
+		var registered = authService.register(new RegisterRequest("Owner", "active.roles@test.com", "secret123", "000000000"));
+		var admin = rolRepository.findByName(RoleName.ROLE_ADMIN).orElseThrow();
+		admin.setActive(false);
+		rolRepository.save(admin);
+		var owner = rolRepository.findByName(RoleName.ROLE_DUENIO).orElseThrow();
+		var user = usuarioRepository.findById(registered.user().id()).orElseThrow();
+		user.setRoles(Set.of(owner, admin));
+		usuarioRepository.save(user);
+
+		assertThat(authService.login(new LoginRequest(user.getEmail(), "secret123")).user().roles()).containsExactly("ROLE_DUENIO");
+		assertThat(authService.refresh(new RefreshTokenRequest(registered.refreshToken())).user().roles()).containsExactly("ROLE_DUENIO");
+		assertThat(authService.me(user.getEmail()).roles()).containsExactly("ROLE_DUENIO");
+	}
 
 	private Long clinicaId() {
 		return clinicaService.getOrCreateDefaultClinic().getId();

@@ -19,6 +19,7 @@ public class RoleInitializer implements CommandLineRunner {
         createIfMissing(RoleName.ROLE_VETERINARIO, "Personal medico veterinario.");
         createIfMissing(RoleName.ROLE_ASISTENTE, "Personal operativo de recepcion y agenda.");
         createIfMissing(RoleName.ROLE_DUENIO, "Cliente o propietario de mascota.");
+        createIfMissing(RoleName.ROLE_SAAS_OPERATOR, "Operador de la plataforma SaaS, sin clinica.");
     }
 
     private void createIfMissing(RoleName name, String description) {

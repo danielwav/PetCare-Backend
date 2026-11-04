@@ -1,6 +1,5 @@
 package com.petcare.backend.security;
 
-import com.petcare.backend.domain.repository.UsuarioRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,8 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -24,8 +24,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final JwtService jwtService;
-	private final CustomUserDetailsService userDetailsService;
-	private final UsuarioRepository usuarioRepository;
+	private final JwtIdentityService jwtIdentityService;
 
 	@Override
 	protected void doFilterInternal(
@@ -37,31 +36,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		if (token != null && jwtService.isValidAccessToken(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
 			try {
-				String subject = jwtService.extractSubject(token);
-				UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
-				if (userDetails.isEnabled()) {
-					UsernamePasswordAuthenticationToken authentication =
-							new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-					authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-					SecurityContextHolder.getContext().setAuthentication(authentication);
-				}
-			} catch (UsernameNotFoundException e) {
-				// Token válido pero usuario ya no existe (ej: DB reseteada, email cambiado).
-				// Intentar buscar por userId del token
-				try {
-					Long userId = jwtService.extractUserId(token);
-					if (userId != null) {
-						UserDetails userDetails = userDetailsService.loadUserById(userId);
-						if (userDetails.isEnabled()) {
-							UsernamePasswordAuthenticationToken authentication =
-									new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-							authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-							SecurityContextHolder.getContext().setAuthentication(authentication);
-						}
-					}
-				} catch (Exception ex) {
-					// No se pudo autenticar con userId
-				}
+				var usuario = jwtIdentityService.resolve(token);
+				var userDetails = User.withUsername(usuario.getEmail()).password(usuario.getPassword())
+						.credentialsExpired(Boolean.TRUE.equals(usuario.getForcePasswordChange()))
+						.authorities(usuario.getRoles().stream().filter(role -> Boolean.TRUE.equals(role.getActive()))
+								.map(role -> role.getName().name()).toArray(String[]::new))
+						.build();
+				var authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+				SecurityContextHolder.getContext().setAuthentication(authentication);
+			} catch (AccessDeniedException e) {
+				SecurityContextHolder.clearContext();
+				response.sendError(HttpServletResponse.SC_FORBIDDEN);
+				return;
+			} catch (AuthenticationException | io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+				SecurityContextHolder.clearContext();
 			}
 		}
 

@@ -72,6 +72,7 @@ public class DataInitializer implements CommandLineRunner {
                     case ROLE_VETERINARIO -> "Personal medico veterinario.";
                     case ROLE_ASISTENTE -> "Personal operativo de recepcion y agenda.";
                     case ROLE_DUENIO -> "Cliente o propietario de mascota.";
+                    case ROLE_SAAS_OPERATOR -> "Operador de la plataforma SaaS, sin clinica.";
                 };
                 return rolRepository.save(Rol.builder()
                         .name(roleName)
@@ -174,6 +175,7 @@ public class DataInitializer implements CommandLineRunner {
             var existingUser = usuarioRepository.findByEmail(email);
             if (existingUser.isPresent()) {
                 var user = existingUser.get();
+                if (user.getRoles().stream().anyMatch(role -> role.getName() == RoleName.ROLE_SAAS_OPERATOR)) continue;
                 if (user.getClinica() != null && !demoClinic.getId().equals(user.getClinica().getId())) continue;
                 user.setFullName((String) u.get("name"));
                 user.setActive(true);
@@ -269,6 +271,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private Usuario demoUsuario(String email, Clinica demoClinic) {
         return usuarioRepository.findByEmail(email)
+                .filter(user -> user.getRoles().stream().noneMatch(role -> role.getName() == RoleName.ROLE_SAAS_OPERATOR))
                 .filter(user -> user.getClinica() != null && demoClinic.getId().equals(user.getClinica().getId()))
                 .orElse(null);
     }

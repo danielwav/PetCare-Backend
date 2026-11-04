@@ -69,7 +69,7 @@ public class ClinicaService {
 	@Transactional
 	public ClinicaResponse updateMyClinic(String email, UpdateClinicaRequest request) {
 		Clinica clinica = findMyClinic(email);
-		planService.assertCanWrite(clinica.getId());
+		planService.lockForWrite(clinica.getId());
 		String slug = request.slug().toLowerCase(Locale.ROOT);
 		if (!slug.equals(clinica.getSlug()) && clinicaRepository.existsBySlug(slug)) {
 			throw new IllegalArgumentException("Ya existe una clinica con ese slug.");

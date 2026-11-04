@@ -9,6 +9,7 @@ import com.petcare.backend.persistence.enums.PlanClinica;
 import com.petcare.backend.persistence.enums.RoleName;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,7 @@ public class PlanService {
 	public void assertStaffCapacity(Long clinicaId) {
 		Clinica clinic = lockClinic(clinicaId);
 		assertWritable(clinic);
-		if (staffUsed(clinicaId) >= staffLimit(clinic)) {
+		if (staffUsed(clinicaId) >= staffLimit(clinic.getPlan())) {
 			throw new PlanException(HttpStatus.CONFLICT, "STAFF_LIMIT_REACHED", "Limite de personal activo alcanzado.");
 		}
 	}
@@ -56,7 +57,7 @@ public class PlanService {
 	public void assertPetCapacity(Long clinicaId) {
 		Clinica clinic = lockClinic(clinicaId);
 		assertWritable(clinic);
-		if (petsUsed(clinicaId) >= petLimit(clinic)) {
+		if (petsUsed(clinicaId) >= petLimit(clinic.getPlan())) {
 			throw new PlanException(HttpStatus.CONFLICT, "PET_LIMIT_REACHED", "Limite de mascotas activas alcanzado.");
 		}
 	}
@@ -71,7 +72,11 @@ public class PlanService {
 
 	@Transactional(readOnly = true)
 	public PlanResponse getPlan(Long clinicaId) {
-		Clinica clinic = findClinic(clinicaId);
+		return getPlan(findClinic(clinicaId));
+	}
+
+	@Transactional(readOnly = true)
+	public PlanResponse getPlan(Clinica clinic) {
 		String status = status(clinic, clock);
 		boolean pro = clinic.getPlan() == PlanClinica.PRO || clinic.getPlan() == PlanClinica.TRIAL;
 		long days = 0;
@@ -83,9 +88,20 @@ public class PlanService {
 		}
 		return new PlanResponse(clinic.getPlan().name(), pro ? "PRO" : clinic.getPlan().name(), status,
 				isReadOnly(clinic, clock), clinic.getTrialStartedAt(), clinic.getTrialEndsAt(), days,
-				staffUsed(clinicaId), staffLimit(clinic), petsUsed(clinicaId), petLimit(clinic),
+				staffUsed(clinic.getId()), staffLimit(clinic.getPlan()), petsUsed(clinic.getId()), petLimit(clinic.getPlan()),
 				BigDecimal.valueOf(pro ? 129 : clinic.getPlan() == PlanClinica.CONSULTORIO ? 59 : 0),
 				BigDecimal.valueOf(pro ? 1290 : clinic.getPlan() == PlanClinica.CONSULTORIO ? 590 : 0), "PEN");
+	}
+
+	// The caller holds the clinic row lock, also used by capacity-increasing writes.
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void assertPlanChangeCapacity(Clinica clinic, PlanClinica target) {
+		if (staffLimit(target) < staffLimit(clinic.getPlan()) && staffUsed(clinic.getId()) > staffLimit(target)) {
+			throw new PlanException(HttpStatus.CONFLICT, "STAFF_LIMIT_EXCEEDED", "El personal activo excede el limite del plan destino.");
+		}
+		if (petLimit(target) < petLimit(clinic.getPlan()) && petsUsed(clinic.getId()) > petLimit(target)) {
+			throw new PlanException(HttpStatus.CONFLICT, "PET_LIMIT_EXCEEDED", "Las mascotas activas exceden el limite del plan destino.");
+		}
 	}
 
 	public static boolean isReadOnly(Clinica clinic, Clock clock) {
@@ -113,8 +129,16 @@ public class PlanService {
 		return clinicaRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
 	}
 
-	private Clinica lockClinic(Long id) {
-		return clinicaRepository.findByIdForUpdate(id).orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
+	// Lock before editing clinic fields. Repeated checks must retain changes made under this lock.
+	@Transactional(propagation = Propagation.MANDATORY)
+	public Clinica lockClinic(Long id) {
+		Clinica clinic = findClinic(id);
+		if (entityManager.getLockMode(clinic) != LockModeType.PESSIMISTIC_WRITE) {
+			clinicaRepository.findByIdForUpdate(id).orElseThrow(() -> new EntityNotFoundException("Clinica no encontrada."));
+			// A locking query does not replace a stale first-level-cache snapshot.
+			entityManager.refresh(clinic, LockModeType.PESSIMISTIC_WRITE);
+		}
+		return clinic;
 	}
 
 	private long staffUsed(Long id) {
@@ -131,12 +155,12 @@ public class PlanService {
 				.setParameter("id", id).getSingleResult();
 	}
 
-	private static int staffLimit(Clinica clinic) {
-		return clinic.getPlan() == PlanClinica.CONSULTORIO ? 2 : clinic.getPlan() == PlanClinica.FREE ? 0 : 5;
+	private static int staffLimit(PlanClinica plan) {
+		return plan == PlanClinica.CONSULTORIO ? 2 : plan == PlanClinica.FREE ? 0 : 5;
 	}
 
-	private static int petLimit(Clinica clinic) {
-		return clinic.getPlan() == PlanClinica.CONSULTORIO ? 500 : clinic.getPlan() == PlanClinica.FREE ? 0 : 2500;
+	private static int petLimit(PlanClinica plan) {
+		return plan == PlanClinica.CONSULTORIO ? 500 : plan == PlanClinica.FREE ? 0 : 2500;
 	}
 
 	private static LocalDateTime now(Clock clock) {

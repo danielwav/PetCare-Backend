@@ -22,6 +22,13 @@ public interface ClinicaRepository extends JpaRepository<Clinica, Long> {
 	Optional<Clinica> findByIdForUpdate(@Param("id") Long id);
 
 	@Query("""
+			select c from Clinica c where :pattern is null
+			or lower(c.nombre) like :pattern escape '!'
+			or lower(c.slug) like :pattern escape '!'
+			""")
+	Page<Clinica> findForSaas(@Param("pattern") String pattern, Pageable pageable);
+
+	@Query("""
 			select c from Clinica c
 			where c.estado = com.petcare.backend.persistence.enums.EstadoClinica.ACTIVA
 			and (:pattern is null
