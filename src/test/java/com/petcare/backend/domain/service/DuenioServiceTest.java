@@ -9,16 +9,23 @@ import com.petcare.backend.domain.repository.UsuarioRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class DuenioServiceTest {
@@ -37,6 +44,9 @@ class DuenioServiceTest {
 
 	@Autowired
 	private UsuarioRepository usuarioRepository;
+
+	@Autowired
+	private MockMvc mvc;
 
 	private Long clinicaId() {
 		return clinicaService.getOrCreateDefaultClinic().getId();
@@ -163,6 +173,63 @@ class DuenioServiceTest {
 
 		assertThat(owner.usuarioId()).isEqualTo(ownerUser.user().id());
 		assertThat(duenioService.findOwn(ownerUser.user().email()).id()).isEqualTo(owner.id());
+	}
+
+	@Test
+	void staffUpdateWithOmittedOrNullUsuarioIdPreservesPersistedLoginLink() throws Exception {
+		AuthResponse account = authService.register(new RegisterRequest(
+				"Original Login", "original.login@test.com", "secret123", "999111222"));
+		Long ownerId = duenioService.findOwn(account.user().email()).id();
+		String otherSlug = clinicaService.createClinic("Other", "contact-identity").getSlug();
+		AuthResponse other = authService.register(new RegisterRequest(
+				"Other Login", "new.contact@test.com", "secret123", "999333444", otherSlug));
+		ServiceTestFixtures.veterinarioUser(authService, usuarioRepository, clinicaId(), "staff.update@test.com");
+
+		for (String usuarioField : List.of("", "\"usuarioId\": null,")) {
+			mvc.perform(put("/api/duenios/{id}", ownerId)
+					.with(user("staff.update@test.com").roles("VETERINARIO"))
+					.contentType("application/json")
+					.content("""
+							{%s "nombres": "Edited", "apellidos": "Contact", "tipoDocumento": "DNI",
+							 "numeroDocumento": "70000801", "telefono": "999555666",
+							 "email": "new.contact@test.com", "direccion": "New address"}
+							""".formatted(usuarioField)))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.usuarioId").value(account.user().id()))
+					.andExpect(jsonPath("$.email").value(other.user().email()));
+
+			DuenioResponse persisted = duenioService.findById(ownerId, clinicaId());
+			assertThat(persisted.usuarioId()).isEqualTo(account.user().id());
+			assertThat(duenioService.findOwn(account.user().email()).id()).isEqualTo(ownerId);
+			assertThat(duenioService.findOwn(other.user().email()).id()).isNotEqualTo(ownerId);
+		}
+		assertThat(authService.me(account.user().email()).fullName()).isEqualTo("Original Login");
+		assertThat(authService.me(other.user().email()).fullName()).isEqualTo("Other Login");
+	}
+
+	@Test
+	void explicitStaffTransferUsesValidatedUserIdAndRejectsAlreadyLinkedUser() {
+		AuthResponse original = authService.register(new RegisterRequest(
+				"Original", "transfer.original@test.com", "secret123", "999111222"));
+		AuthResponse replacement = authService.register(new RegisterRequest(
+				"Replacement", "transfer.replacement@test.com", "secret123", "999333444"));
+		DuenioResponse owner = duenioService.findOwn(original.user().email());
+		DuenioRequest transfer = new DuenioRequest(replacement.user().id(), "Owner", "Contact", "DNI",
+				"70000802", "999555666", "transfer.contact@test.com", null);
+
+		assertThatThrownBy(() -> duenioService.update(owner.id(), transfer, clinicaId()))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("otro duenio");
+		assertThat(duenioService.findOwn(original.user().email()).usuarioId()).isEqualTo(original.user().id());
+
+		duenioRepository.deleteById(duenioService.findOwn(replacement.user().email()).id());
+		DuenioResponse updated = duenioService.update(owner.id(), transfer, clinicaId());
+		assertThat(updated.usuarioId()).isEqualTo(replacement.user().id());
+		assertThat(duenioService.findById(owner.id(), clinicaId()).usuarioId()).isEqualTo(replacement.user().id());
+		assertThat(duenioService.findOwn(replacement.user().email()).id()).isEqualTo(owner.id());
+		assertThatThrownBy(() -> duenioService.findOwn(original.user().email()))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThat(authService.me(original.user().email()).fullName()).isEqualTo("Original");
+		assertThat(authService.me(replacement.user().email()).fullName()).isEqualTo("Replacement");
 	}
 
 	@Test

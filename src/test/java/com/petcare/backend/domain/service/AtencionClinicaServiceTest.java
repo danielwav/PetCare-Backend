@@ -7,6 +7,7 @@ import com.petcare.backend.domain.dto.request.CostoCitaServicioRequest;
 import com.petcare.backend.domain.dto.request.DuenioRequest;
 import com.petcare.backend.domain.dto.request.HorarioVeterinarioRequest;
 import com.petcare.backend.domain.dto.request.MascotaRequest;
+import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.dto.request.ServicioRequest;
 import com.petcare.backend.domain.dto.request.VeterinarioRequest;
 import com.petcare.backend.domain.dto.response.AtencionClinicaResponse;
@@ -26,8 +27,10 @@ import com.petcare.backend.persistence.enums.SexoMascota;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -37,8 +40,18 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class AtencionClinicaServiceTest {
@@ -80,6 +93,9 @@ class AtencionClinicaServiceTest {
 	@Autowired
 	private ServicioService servicioService;
 
+	@Autowired
+	private MockMvc mvc;
+
 	@Test
 	void registerClinicalAttentionAndAddToHistory() {
 		TestData data = createBaseData();
@@ -96,6 +112,74 @@ class AtencionClinicaServiceTest {
 		assertThat(updatedCita.estado()).isEqualTo(EstadoCita.ATENDIDA);
 		assertThat(updatedCita.requiereConfirmacion()).isFalse();
 		assertThat(historia.atenciones()).extracting(AtencionClinicaResponse::id).contains(atencion.id());
+	}
+
+	@Test
+	void ownerReadsRedactInternalNotesWithoutChangingStaffSnapshotsOrHistoryAccess() throws Exception {
+		TestData data = createBaseData();
+		var owner = authService.register(new RegisterRequest("Daniel Torres", data.duenio().email(), "secret123", "999888777"));
+		var other = authService.register(new RegisterRequest("Other Owner", "other.clinical@test.com", "secret123", "999111222"));
+		CitaResponse cita = citaService.create(baseCitaRequest(data, nextDate(DayOfWeek.MONDAY)), clinicaId());
+		moveCitaToPast(cita.id());
+		AtencionClinicaResponse registered = atencionClinicaService.register(cita.id(), baseAtencionRequest(), clinicaId());
+		ControlMensualMascotaResponse control = controlMensualMascotaService.create(data.mascota().id(),
+				baseControlRequest(data.veterinario().id(), LocalDate.now().withDayOfMonth(1), "12.80"), clinicaId());
+		AtencionClinicaResponse staffAttention = atencionClinicaService.findByIdScoped(registered.id(), clinicaId());
+		HistoriaClinicaResponse staffHistory = atencionClinicaService.findHistoriaClinicaByMascotaScoped(data.mascota().id(), clinicaId());
+		String attentionPath = "/api/atenciones/" + registered.id();
+		String historyPath = "/api/mascotas/" + data.mascota().id() + "/historia-clinica";
+		String reportPath = "/api/reportes/mascotas/" + data.mascota().id() + "/historia-clinica";
+
+		mvc.perform(get(attentionPath).header("Authorization", "Bearer " + owner.accessToken()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.id").value(registered.id()))
+				.andExpect(jsonPath("$.diagnostico").value(registered.diagnostico()))
+				.andExpect(jsonPath("$.tratamiento").value(registered.tratamiento()))
+				.andExpect(jsonPath("$.recomendaciones").value(registered.recomendaciones()))
+				.andExpect(jsonPath("$.observacionesClinicas").value(registered.observacionesClinicas()))
+				.andExpect(jsonPath("$..notasInternas", everyItem(nullValue())))
+				.andExpect(content().string(not(containsString(registered.notasInternas()))));
+		mvc.perform(get(historyPath).header("Authorization", "Bearer " + owner.accessToken()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.atenciones.length()").value(1))
+				.andExpect(jsonPath("$.atenciones[0].id").value(registered.id()))
+				.andExpect(jsonPath("$.atenciones[0].diagnostico").value(registered.diagnostico()))
+				.andExpect(jsonPath("$.controlesMensuales[0].id").value(control.id()))
+				.andExpect(jsonPath("$..notasInternas", everyItem(nullValue())))
+				.andExpect(content().string(not(containsString(registered.notasInternas()))));
+		for (String path : List.of("/api/citas/" + cita.id(), "/api/citas")) {
+			mvc.perform(get(path).header("Authorization", "Bearer " + owner.accessToken()))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$..notasInternas", everyItem(nullValue())))
+					.andExpect(content().string(not(containsString(registered.notasInternas()))));
+		}
+		mvc.perform(get(reportPath).header("Authorization", "Bearer " + owner.accessToken()))
+				.andExpect(status().isForbidden());
+		for (String path : List.of(attentionPath, historyPath, "/api/citas/" + cita.id())) {
+			mvc.perform(get(path).header("Authorization", "Bearer " + other.accessToken()))
+					.andExpect(status().isForbidden())
+					.andExpect(content().string(not(containsString(registered.notasInternas()))));
+		}
+
+		assertThat(atencionClinicaService.findByIdForDuenio(registered.id(), owner.user().email()).notasInternas()).isNull();
+		assertThat(atencionClinicaService.findHistoriaClinicaByMascotaForDuenio(data.mascota().id(), owner.user().email())
+				.controlesMensuales()).isEqualTo(staffHistory.controlesMensuales());
+		assertThat(atencionClinicaService.findByIdScoped(registered.id(), clinicaId())).isEqualTo(staffAttention);
+		assertThat(atencionClinicaService.findHistoriaClinicaByMascotaScoped(data.mascota().id(), clinicaId())).isEqualTo(staffHistory);
+		assertThat(registered.notasInternas()).isEqualTo(baseAtencionRequest().notasInternas());
+
+		for (String staffRole : List.of("ADMIN", "ASISTENTE", "VETERINARIO")) {
+			for (String[] roles : List.of(new String[]{staffRole}, new String[]{"DUENIO", staffRole})) {
+				mvc.perform(get(attentionPath).with(user("ana.vet@test.com").roles(roles)))
+						.andExpect(status().isOk())
+						.andExpect(jsonPath("$.notasInternas").value(registered.notasInternas()));
+				for (String path : List.of(historyPath, reportPath)) {
+					mvc.perform(get(path).with(user("ana.vet@test.com").roles(roles)))
+							.andExpect(status().isOk())
+							.andExpect(jsonPath("$.atenciones[0].notasInternas").value(registered.notasInternas()));
+				}
+			}
+		}
 	}
 
 	@Test

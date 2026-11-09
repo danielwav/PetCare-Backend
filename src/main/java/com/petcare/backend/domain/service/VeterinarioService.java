@@ -5,14 +5,18 @@ import com.petcare.backend.domain.dto.request.VeterinarioRequest;
 import com.petcare.backend.domain.dto.response.DisponibilidadVeterinarioResponse;
 import com.petcare.backend.domain.dto.response.HorarioVeterinarioResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
+import com.petcare.backend.domain.repository.CitaRepository;
 import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.HorarioVeterinarioRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.domain.repository.VeterinarioRepository;
 import com.petcare.backend.persistence.entity.Clinica;
+import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.HorarioVeterinario;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.entity.Veterinario;
+import com.petcare.backend.persistence.enums.EstadoCita;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,9 +38,13 @@ public class VeterinarioService {
 	private final HorarioVeterinarioRepository horarioVeterinarioRepository;
 	private final UsuarioRepository usuarioRepository;
 	private final ClinicaRepository clinicaRepository;
+	private final CitaRepository citaRepository;
+	private final PlanService planService;
+	private final EntityManager entityManager;
 
 	@Transactional
 	public VeterinarioResponse create(VeterinarioRequest request, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		validateUniqueColegiatura(request.numeroColegiatura(), null);
 
 		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
@@ -66,12 +74,12 @@ public class VeterinarioService {
 				.build();
 
 		replaceHorarios(veterinario, request.horarios());
-		return toResponse(veterinarioRepository.save(veterinario));
+		return toResponse(veterinarioRepository.saveAndFlush(veterinario));
 	}
 
 	@Transactional
 	public VeterinarioResponse update(Long id, VeterinarioRequest request, Long clinicaId) {
-		Veterinario veterinario = findEntityById(id, clinicaId);
+		Veterinario veterinario = findForWrite(id, clinicaId);
 		if (veterinario.getClinica() == null || !veterinario.getClinica().getId().equals(clinicaId)) {
 			throw new AccessDeniedException("No tienes permiso para acceder a este veterinario.");
 		}
@@ -96,7 +104,7 @@ public class VeterinarioService {
 		veterinario.setUpdatedAt(LocalDateTime.now());
 
 		replaceHorarios(veterinario, request.horarios());
-		return toResponse(veterinarioRepository.save(veterinario));
+		return toResponse(veterinarioRepository.saveAndFlush(veterinario));
 	}
 
 	private String coalesce(String value, String fallback) {
@@ -119,17 +127,21 @@ public class VeterinarioService {
 
 	@Transactional
 	public void deactivate(Long id, Long clinicaId) {
-		Veterinario veterinario = findEntityById(id, clinicaId);
+		Veterinario veterinario = findForWrite(id, clinicaId);
 		veterinario.setActive(false);
 		veterinario.setUpdatedAt(LocalDateTime.now());
 		veterinario.getHorarios().forEach(horario -> horario.setActive(false));
-		veterinarioRepository.save(veterinario);
+		veterinarioRepository.saveAndFlush(veterinario);
 	}
 
 	@Transactional(readOnly = true)
 	public DisponibilidadVeterinarioResponse findDisponibilidad(Long id, LocalDate fecha, Integer duracionMinutos, Long clinicaId) {
-		if (fecha.isBefore(LocalDate.now())) {
+		LocalDateTime now = LocalDateTime.now();
+		if (fecha.isBefore(now.toLocalDate())) {
 			throw new IllegalArgumentException("La fecha de disponibilidad no puede estar en el pasado.");
+		}
+		if (duracionMinutos != null && duracionMinutos < 15) {
+			throw new IllegalArgumentException("La duracion debe ser de al menos 15 minutos.");
 		}
 
 		Veterinario veterinario = findEntityById(id, clinicaId);
@@ -139,8 +151,12 @@ public class VeterinarioService {
 
 		List<HorarioVeterinario> horarios = horarioVeterinarioRepository
 				.findByVeterinarioIdAndDiaSemanaAndActiveTrueOrderByHoraInicioAsc(id, fecha.getDayOfWeek());
+		List<Cita> citas = citaRepository.search(null, fecha, clinicaId, null, null, id).stream()
+				.filter(cita -> cita.getEstado() != EstadoCita.CANCELADA)
+				.toList();
 		List<LocalTime> slots = horarios.stream()
-				.flatMap(horario -> buildSlots(horario, duracionMinutos).stream())
+				.flatMap(horario -> buildSlots(horario, duracionMinutos, fecha, now, citas).stream())
+				.distinct()
 				.sorted()
 				.toList();
 
@@ -152,16 +168,24 @@ public class VeterinarioService {
 		);
 	}
 
-	private List<LocalTime> buildSlots(HorarioVeterinario horario, Integer requestedDuration) {
+	private List<LocalTime> buildSlots(
+			HorarioVeterinario horario, Integer requestedDuration, LocalDate fecha, LocalDateTime now, List<Cita> citas
+	) {
 		int duration = requestedDuration == null ? horario.getDuracionBloqueMinutos() : requestedDuration;
-		if (duration <= 0) {
-			throw new IllegalArgumentException("La duracion debe ser mayor a cero.");
+		if (duration < 15 || horario.getDuracionBloqueMinutos() < 15) {
+			throw new IllegalArgumentException("La duracion debe ser de al menos 15 minutos.");
 		}
 
 		List<LocalTime> slots = new ArrayList<>();
-		LocalTime cursor = horario.getHoraInicio();
-		while (!cursor.plusMinutes(duration).isAfter(horario.getHoraFin())) {
-			slots.add(cursor);
+		LocalDateTime cursor = LocalDateTime.of(fecha, horario.getHoraInicio());
+		LocalDateTime scheduleEnd = LocalDateTime.of(fecha, horario.getHoraFin());
+		while (!cursor.plusMinutes(duration).isAfter(scheduleEnd)) {
+			LocalTime inicio = cursor.toLocalTime();
+			LocalTime fin = cursor.plusMinutes(duration).toLocalTime();
+			if (cursor.isAfter(now) && citas.stream().noneMatch(cita ->
+					cita.getHoraInicio().isBefore(fin) && cita.getHoraFin().isAfter(inicio))) {
+				slots.add(inicio);
+			}
 			cursor = cursor.plusMinutes(horario.getDuracionBloqueMinutos());
 		}
 		return slots;
@@ -170,6 +194,14 @@ public class VeterinarioService {
 	private Veterinario findEntityById(Long id) {
 		return veterinarioRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Veterinario no encontrado."));
+	}
+
+	private Veterinario findForWrite(Long id, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
+		Veterinario veterinario = findEntityById(id, clinicaId);
+		// Do not cascade refresh into schedule rows that a concurrent update may have deleted.
+		entityManager.detach(veterinario);
+		return findEntityById(id, clinicaId);
 	}
 
 	private Veterinario findEntityById(Long id, Long clinicaId) {

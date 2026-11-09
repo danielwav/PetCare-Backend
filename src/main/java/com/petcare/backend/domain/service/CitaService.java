@@ -18,6 +18,7 @@ import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Servicio;
 import com.petcare.backend.persistence.entity.Veterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -44,20 +45,24 @@ public class CitaService {
 	private final HorarioVeterinarioRepository horarioVeterinarioRepository;
 	private final ServicioRepository servicioRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
+	private final PlanService planService;
+	private final EntityManager entityManager;
 
 	@Transactional
 	public CitaResponse create(CitaRequest request, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		Duenio duenio = findDuenio(request.duenioId());
 		Mascota mascota = findMascota(request.mascotaId());
 		Veterinario veterinario = findVeterinario(request.veterinarioId());
-		LocalTime horaFin = request.horaInicio().plusMinutes(request.duracionMinutos());
+		entityManager.refresh(duenio);
+		entityManager.refresh(mascota);
 
 		validateDuenioBelongsToClinic(duenio, clinicaId);
 		validateMascotaBelongsToClinic(mascota, clinicaId);
 		validateVeterinarioBelongsToClinic(veterinario, clinicaId);
 		validateBaseData(duenio, mascota, veterinario);
 		validateMascotaBelongsToDuenio(mascota, duenio);
-		validateSchedule(request.fecha(), request.horaInicio(), horaFin, request.duracionMinutos(), veterinario.getId(), null);
+		LocalTime horaFin = validateSchedule(request.fecha(), request.horaInicio(), request.duracionMinutos(), veterinario.getId(), null);
 
 		LocalDateTime now = LocalDateTime.now();
 		Cita cita = Cita.builder()
@@ -80,13 +85,13 @@ public class CitaService {
 				.build();
 
 		replaceCostDetails(cita, request.servicios(), request.descuento());
-		return toResponse(citaRepository.save(cita));
+		return toResponse(citaRepository.saveAndFlush(cita));
 	}
 
 	@Transactional
 	public CitaResponse createAsDuenio(CitaRequest request, String email) {
+		Duenio duenio = findLockedDuenio(email);
 		authenticatedDuenioService.validateOwnDuenio(email, request.duenioId());
-		Duenio duenio = findDuenio(request.duenioId());
 		return create(request, duenio.getClinica().getId());
 	}
 
@@ -130,22 +135,26 @@ public class CitaService {
 
 	@Transactional
 	public CitaResponse update(Long id, CitaRequest request, Long clinicaId) {
-		Cita cita = findEntityById(id, clinicaId);
+		Cita cita = findForWrite(id, clinicaId);
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
 			throw new IllegalArgumentException("No se puede modificar una cita cancelada.");
+		}
+		if (cita.getEstado() == EstadoCita.ATENDIDA || cita.getEstado() == EstadoCita.NO_ASISTIO) {
+			throw new IllegalArgumentException("No se puede modificar una cita cerrada.");
 		}
 
 		Duenio duenio = findDuenio(request.duenioId());
 		Mascota mascota = findMascota(request.mascotaId());
 		Veterinario veterinario = findVeterinario(request.veterinarioId());
-		LocalTime horaFin = request.horaInicio().plusMinutes(request.duracionMinutos());
+		entityManager.refresh(duenio);
+		entityManager.refresh(mascota);
 
 		validateDuenioBelongsToClinic(duenio, clinicaId);
 		validateMascotaBelongsToClinic(mascota, clinicaId);
 		validateVeterinarioBelongsToClinic(veterinario, clinicaId);
 		validateBaseData(duenio, mascota, veterinario);
 		validateMascotaBelongsToDuenio(mascota, duenio);
-		validateSchedule(request.fecha(), request.horaInicio(), horaFin, request.duracionMinutos(), veterinario.getId(), id);
+		LocalTime horaFin = validateSchedule(request.fecha(), request.horaInicio(), request.duracionMinutos(), veterinario.getId(), id);
 
 		cita.setDuenio(duenio);
 		cita.setClinica(duenio.getClinica());
@@ -163,37 +172,45 @@ public class CitaService {
 		cita.setUpdatedAt(LocalDateTime.now());
 		replaceCostDetails(cita, request.servicios(), request.descuento());
 
-		return toResponse(citaRepository.save(cita));
+		return toResponse(citaRepository.saveAndFlush(cita));
 	}
 
 	@Transactional
 	public CitaResponse cancel(Long id, Long clinicaId) {
-		Cita cita = findEntityById(id, clinicaId);
+		return doCancel(findForWrite(id, clinicaId));
+	}
+
+	private CitaResponse doCancel(Cita cita) {
 		if (cita.getEstado() == EstadoCita.CANCELADA) {
 			return toResponse(cita);
+		}
+		if (cita.getEstado() == EstadoCita.ATENDIDA || cita.getEstado() == EstadoCita.NO_ASISTIO) {
+			throw new IllegalArgumentException("No se puede cancelar una cita cerrada.");
 		}
 
 		cita.setEstado(EstadoCita.CANCELADA);
 		cita.setUpdatedAt(LocalDateTime.now());
-		return toResponse(citaRepository.save(cita));
+		return toResponse(citaRepository.saveAndFlush(cita));
 	}
 
 	@Transactional
 	public CitaResponse cancelAsDuenio(Long id, String email) {
-		Cita cita = findEntityById(id);
+		Duenio duenio = findLockedDuenio(email);
+		Cita cita = findForWrite(id, duenio.getClinica().getId());
 		validateCitaBelongsToAuthenticatedDuenio(cita, email);
-		return cancel(id, cita.getClinica().getId());
+		return doCancel(cita);
 	}
 
 	@Transactional
 	public CitaResponse confirm(Long id, String confirmadaPor, Long clinicaId) {
-		Cita cita = findEntityById(id, clinicaId);
+		Cita cita = findForWrite(id, clinicaId);
 		return doConfirm(cita, confirmadaPor);
 	}
 
 	@Transactional
 	public CitaResponse confirmAsDuenio(Long id, String email) {
-		Cita cita = findEntityById(id);
+		Duenio duenio = findLockedDuenio(email);
+		Cita cita = findForWrite(id, duenio.getClinica().getId());
 		validateCitaBelongsToAuthenticatedDuenio(cita, email);
 		return doConfirm(cita, email);
 	}
@@ -214,7 +231,7 @@ public class CitaService {
 		cita.setFechaConfirmacion(LocalDateTime.now());
 		cita.setConfirmadaPor(normalizeText(confirmadaPor));
 		cita.setUpdatedAt(LocalDateTime.now());
-		return toResponse(citaRepository.save(cita));
+		return toResponse(citaRepository.saveAndFlush(cita));
 	}
 
 	@Transactional(readOnly = true)
@@ -292,20 +309,25 @@ public class CitaService {
 				.build();
 	}
 
-	private void validateSchedule(
+	private LocalTime validateSchedule(
 			LocalDate fecha,
 			LocalTime horaInicio,
-			LocalTime horaFin,
 			Integer duracionMinutos,
 			Long veterinarioId,
 			Long currentCitaId
 	) {
-		if (!LocalDateTime.of(fecha, horaInicio).isAfter(LocalDateTime.now())) {
+		LocalDateTime inicio = LocalDateTime.of(fecha, horaInicio);
+		if (!inicio.isAfter(LocalDateTime.now())) {
 			throw new IllegalArgumentException("La cita debe programarse en una fecha y hora futura.");
 		}
-		if (duracionMinutos <= 0) {
-			throw new IllegalArgumentException("La duracion debe ser mayor a cero.");
+		if (duracionMinutos < 15) {
+			throw new IllegalArgumentException("La duracion debe ser de al menos 15 minutos.");
 		}
+		LocalDateTime fin = inicio.plusMinutes(duracionMinutos);
+		if (!fin.toLocalDate().equals(fecha)) {
+			throw new IllegalArgumentException("La cita debe iniciar y terminar en el mismo dia.");
+		}
+		LocalTime horaFin = fin.toLocalTime();
 
 		List<HorarioVeterinario> horarios = horarioVeterinarioRepository
 				.findByVeterinarioIdAndDiaSemanaAndActiveTrueOrderByHoraInicioAsc(veterinarioId, fecha.getDayOfWeek());
@@ -325,6 +347,7 @@ public class CitaService {
 		if (hasOverlap) {
 			throw new IllegalArgumentException("El veterinario ya tiene una cita programada en ese horario.");
 		}
+		return horaFin;
 	}
 
 	private void validateBaseData(Duenio duenio, Mascota mascota, Veterinario veterinario) {
@@ -352,6 +375,23 @@ public class CitaService {
 		}
 	}
 
+	private Duenio findLockedDuenio(String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		Long clinicaId = duenio.getClinica().getId();
+		planService.lockForWrite(clinicaId);
+		entityManager.refresh(duenio);
+		validateDuenioBelongsToClinic(duenio, clinicaId);
+		return duenio;
+	}
+
+	private Cita findForWrite(Long id, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
+		Cita cita = findEntityById(id, clinicaId);
+		// Reload the aggregate: cascade refresh could visit cost rows replaced while we waited for the lock.
+		entityManager.detach(cita);
+		return findEntityById(id, clinicaId);
+	}
+
 	private Cita findEntityById(Long id) {
 		return citaRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
@@ -374,6 +414,10 @@ public class CitaService {
 	}
 
 	private Veterinario findVeterinario(Long id) {
+		Veterinario veterinario = veterinarioRepository.findById(id)
+				.orElseThrow(() -> new EntityNotFoundException("Veterinario no encontrado."));
+		// Schedules may have been replaced since this veterinarian entered the persistence context.
+		entityManager.detach(veterinario);
 		return veterinarioRepository.findById(id)
 				.orElseThrow(() -> new EntityNotFoundException("Veterinario no encontrado."));
 	}

@@ -15,23 +15,41 @@ import com.petcare.backend.domain.dto.response.MascotaResponse;
 import com.petcare.backend.domain.dto.response.ServicioResponse;
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
 import com.petcare.backend.domain.repository.UsuarioRepository;
+import com.petcare.backend.domain.repository.CitaRepository;
+import com.petcare.backend.domain.repository.HorarioVeterinarioRepository;
+import com.petcare.backend.persistence.entity.HorarioVeterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.SexoMascota;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.MockedStatic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import com.petcare.backend.web.ApiExceptionHandler;
+import com.petcare.backend.web.CitaController;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -61,6 +79,12 @@ class CitaServiceTest {
 
 	@Autowired
 	private ServicioService servicioService;
+
+	@Autowired
+	private CitaRepository citaRepository;
+
+	@Autowired
+	private HorarioVeterinarioRepository horarioVeterinarioRepository;
 
 	@Test
 	void createFindUpdateAndCancelCita() {
@@ -120,6 +144,110 @@ class CitaServiceTest {
 				LocalTime.of(9, 15),
 				"Cita cruzada"
 		), clinicaId())).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	void availabilityExcludesOverlapsAllowsAdjacencyAndCancellationFreesSlots() {
+		TestData data = createBaseData();
+		LocalDate date = nextDate(DayOfWeek.MONDAY);
+		CitaResponse booked = citaService.create(baseCitaRequest(data, date, LocalTime.of(9, 30), "Reservada"), clinicaId());
+
+		for (EstadoCita estado : List.of(EstadoCita.PROGRAMADA, EstadoCita.CONFIRMADA, EstadoCita.ATENDIDA, EstadoCita.NO_ASISTIO)) {
+			var entity = citaRepository.findById(booked.id()).orElseThrow();
+			entity.setEstado(estado);
+			citaRepository.save(entity);
+			assertThat(veterinarioService.findDisponibilidad(data.veterinario().id(), date, 30, clinicaId())
+					.horariosDisponibles()).containsExactly(LocalTime.of(9, 0), LocalTime.of(10, 0), LocalTime.of(10, 30));
+		}
+		var activeBooking = citaRepository.findById(booked.id()).orElseThrow();
+		activeBooking.setEstado(EstadoCita.PROGRAMADA);
+		citaRepository.save(activeBooking);
+		assertThat(veterinarioService.findDisponibilidad(data.veterinario().id(), date, 60, clinicaId())
+				.horariosDisponibles()).containsExactly(LocalTime.of(10, 0));
+		assertThat(veterinarioService.findDisponibilidad(data.veterinario().id(), date, 45, clinicaId())
+				.horariosDisponibles()).containsExactly(LocalTime.of(10, 0));
+		assertThat(veterinarioService.findDisponibilidad(data.veterinario().id(), date, 15, clinicaId())
+				.horariosDisponibles()).containsExactly(LocalTime.of(9, 0), LocalTime.of(10, 0), LocalTime.of(10, 30));
+
+		CitaResponse before = citaService.create(baseCitaRequest(data, date, LocalTime.of(9, 0), "Adyacente anterior"), clinicaId());
+		CitaResponse after = citaService.create(baseCitaRequest(data, date, LocalTime.of(10, 0), "Adyacente posterior"), clinicaId());
+		citaService.cancel(booked.id(), clinicaId());
+		assertThat(veterinarioService.findDisponibilidad(data.veterinario().id(), date, null, clinicaId())
+				.horariosDisponibles()).containsExactly(LocalTime.of(9, 30), LocalTime.of(10, 30));
+		CitaResponse replacement = citaService.create(baseCitaRequest(data, date, LocalTime.of(9, 30), "Reemplazo"), clinicaId());
+		assertThat(replacement.horaFin()).isEqualTo(LocalTime.of(10, 0));
+		assertThat(before.horaFin()).isEqualTo(booked.horaInicio());
+		assertThat(after.horaInicio()).isEqualTo(booked.horaFin());
+	}
+
+	@Test
+	void availabilityAndCreationDenyVeterinariansFromAnotherClinic() {
+		TestData data = createBaseData();
+		Long otherClinicId = clinicaService.createClinic("Otra clinica", "otra-clinica").getId();
+		VeterinarioResponse foreign = veterinarioService.create(new VeterinarioRequest(
+				ServiceTestFixtures.veterinarioUser(authService, usuarioRepository, otherClinicId, "foreign.vet@test.com"),
+				"Otra", "Veterinaria", "CMVP-FOREIGN", "Medicina general", "999777666", "foreign.vet@test.com",
+				List.of(new HorarioVeterinarioRequest(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(11, 0), 30))
+		), otherClinicId);
+		LocalDate date = nextDate(DayOfWeek.MONDAY);
+		CitaRequest request = new CitaRequest(data.duenio().id(), data.mascota().id(), foreign.id(), date,
+				LocalTime.of(9, 0), 30, "Otra clinica", List.of(new CostoCitaServicioRequest(data.consulta().id(), 1)), BigDecimal.ZERO);
+
+		assertThatThrownBy(() -> veterinarioService.findDisponibilidad(foreign.id(), date, 30, clinicaId()))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> veterinarioService.findDisponibilidad(data.veterinario().id(), date, 30, otherClinicId))
+				.isInstanceOf(AccessDeniedException.class);
+		assertThatThrownBy(() -> citaService.create(request, clinicaId())).isInstanceOf(AccessDeniedException.class);
+		assertThat(citaRepository.count()).isZero();
+	}
+
+	@Test
+	void rejectElapsedTimeTodayButAllowFutureSameDayAppointment() {
+		TestData data = createBaseData();
+		LocalDate today = LocalDate.now();
+		HorarioVeterinario horario = horarioVeterinarioRepository
+				.findByVeterinarioIdAndDiaSemanaAndActiveTrueOrderByHoraInicioAsc(data.veterinario().id(), DayOfWeek.MONDAY)
+				.getFirst();
+		horario.setDiaSemana(today.getDayOfWeek());
+		horarioVeterinarioRepository.save(horario);
+		LocalDateTime now = today.atTime(9, 15);
+
+		try (MockedStatic<LocalDateTime> time = mockStatic(LocalDateTime.class, CALLS_REAL_METHODS)) {
+			time.when(LocalDateTime::now).thenReturn(now);
+			assertThatThrownBy(() -> citaService.create(baseCitaRequest(data, today, LocalTime.of(9, 0), "Vencida"), clinicaId()))
+					.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("futura");
+			assertThat(citaService.create(baseCitaRequest(data, today, LocalTime.of(9, 30), "Futura"), clinicaId())
+					.horaFin()).isEqualTo(LocalTime.of(10, 0));
+		}
+	}
+
+	@ParameterizedTest
+	@CsvSource({"23:45,15", "23:30,60", "09:00,1440", "09:00,1470", "23:30,2147483647", "09:00,14"})
+	void rejectMidnightAndOversizedDurationsOnCreateUpdateAndHttp(LocalTime start, int duration) throws Exception {
+		TestData data = createBaseData();
+		LocalDate date = nextDate(DayOfWeek.MONDAY);
+		CitaResponse existing = citaService.create(baseCitaRequest(data, date, LocalTime.of(10, 0), "Valida"), clinicaId());
+		CitaRequest invalid = new CitaRequest(data.duenio().id(), data.mascota().id(), data.veterinario().id(),
+				date, start, duration, "Duracion invalida", List.of(new CostoCitaServicioRequest(data.consulta().id(), 1)), BigDecimal.ZERO);
+
+		assertThatThrownBy(() -> citaService.create(invalid, clinicaId())).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> citaService.update(existing.id(), invalid, clinicaId())).isInstanceOf(IllegalArgumentException.class);
+		assertThat(citaService.findById(existing.id(), clinicaId()).horaInicio()).isEqualTo(LocalTime.of(10, 0));
+
+		MockMvc mvc = MockMvcBuilders.standaloneSetup(new CitaController(citaService, clinicaService))
+				.setControllerAdvice(new ApiExceptionHandler()).build();
+		mvc.perform(post("/api/citas")
+				.principal(new UsernamePasswordAuthenticationToken("ana.vet@test.com", "unused",
+						List.of(new SimpleGrantedAuthority("ROLE_VETERINARIO"))))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"duenioId":%d,"mascotaId":%d,"veterinarioId":%d,"fecha":"%s",
+						"horaInicio":"%s","duracionMinutos":%d,"motivo":"Duracion invalida",
+						"servicios":[{"servicioId":%d,"cantidad":1}],"descuento":0}
+						""".formatted(data.duenio().id(), data.mascota().id(), data.veterinario().id(),
+						date, start, duration, data.consulta().id())))
+				.andExpect(status().isBadRequest());
+		assertThat(citaRepository.count()).isEqualTo(1);
 	}
 
 	@Test

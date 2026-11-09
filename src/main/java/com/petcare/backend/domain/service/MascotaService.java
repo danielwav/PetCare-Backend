@@ -10,6 +10,7 @@ import com.petcare.backend.persistence.entity.Duenio;
 import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.EstadoMascota;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -30,6 +31,7 @@ public class MascotaService {
 	private final CitaRepository citaRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
 	private final PlanService planService;
+	private final EntityManager entityManager;
 
 	@Transactional
 	public MascotaResponse create(MascotaRequest request, Long clinicaId) {
@@ -124,8 +126,7 @@ public class MascotaService {
 
 	@Transactional
 	public MascotaResponse update(Long id, MascotaRequest request, Long clinicaId) {
-		planService.assertCanWrite(clinicaId);
-		Mascota mascota = findEntityById(id, clinicaId);
+		Mascota mascota = findForWrite(id, clinicaId);
 		Duenio duenio = findActiveDuenioById(request.duenioId());
 		validateDuenioBelongsToClinic(duenio, clinicaId);
 
@@ -142,15 +143,14 @@ public class MascotaService {
 		mascota.setFotoUrl(request.fotoUrl());
 		mascota.setUpdatedAt(LocalDateTime.now());
 
-		return toResponse(mascotaRepository.save(mascota));
+		return toResponse(mascotaRepository.saveAndFlush(mascota));
 	}
 
 	@Transactional
 	public MascotaResponse updateForDuenio(Long id, MascotaRequest request, String email) {
-		Mascota mascota = findEntityById(id);
-		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		Duenio duenio = findLockedDuenio(email);
+		Mascota mascota = findForWrite(id, duenio.getClinica().getId());
 		validateOwnedMascota(mascota, duenio);
-		planService.assertCanWrite(duenio.getClinica().getId());
 		mascota.setNombre(normalizeText(request.nombre()));
 		mascota.setEspecie(normalizeText(request.especie()));
 		mascota.setRaza(normalizeText(request.raza()));
@@ -161,38 +161,65 @@ public class MascotaService {
 		mascota.setObservaciones(normalizeNullableText(request.observaciones()));
 		mascota.setFotoUrl(request.fotoUrl());
 		mascota.setUpdatedAt(LocalDateTime.now());
-		return toResponse(mascotaRepository.save(mascota));
+		return toResponse(mascotaRepository.saveAndFlush(mascota));
 	}
 
 	@Transactional
 	public void deactivateForDuenio(Long id, String email) {
-		Mascota mascota = findEntityById(id);
-		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		Duenio duenio = findLockedDuenio(email);
+		Long clinicaId = duenio.getClinica().getId();
+		Mascota mascota = findForWrite(id, clinicaId);
 		validateOwnedMascota(mascota, duenio);
-		planService.assertCanWrite(duenio.getClinica().getId());
-		cancelFutureCitas(id);
+		cancelFutureCitas(id, clinicaId);
 		mascota.setActive(false);
 		mascota.setUpdatedAt(LocalDateTime.now());
-		mascotaRepository.save(mascota);
+		mascotaRepository.saveAndFlush(mascota);
 	}
 
 	@Transactional
 	public void deactivate(Long id, Long clinicaId) {
-		planService.assertCanWrite(clinicaId);
-		Mascota mascota = findEntityById(id, clinicaId);
-		cancelFutureCitas(id);
+		Mascota mascota = findForWrite(id, clinicaId);
+		cancelFutureCitas(id, clinicaId);
 		mascota.setActive(false);
 		mascota.setUpdatedAt(LocalDateTime.now());
-		mascotaRepository.save(mascota);
+		mascotaRepository.saveAndFlush(mascota);
 	}
 
-	private void cancelFutureCitas(Long mascotaId) {
+	private void cancelFutureCitas(Long mascotaId, Long clinicaId) {
+		LocalDateTime now = LocalDateTime.now();
 		List<Cita> futureCitas = citaRepository.findByMascotaIdAndFechaGreaterThanEqualAndEstadoIn(
-				mascotaId, LocalDate.now(), List.of(EstadoCita.PROGRAMADA, EstadoCita.CONFIRMADA));
-		for (Cita cita : futureCitas) {
-			cita.setEstado(EstadoCita.CANCELADA);
+				mascotaId, now.toLocalDate(), List.of(EstadoCita.PROGRAMADA, EstadoCita.CONFIRMADA));
+		for (Cita candidate : futureCitas) {
+			// A query can return an old managed snapshot, including replaced cost rows.
+			entityManager.detach(candidate);
+			Cita cita = citaRepository.findById(candidate.getId())
+					.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
+			if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)
+					|| !cita.getMascota().getId().equals(mascotaId)) {
+				throw new AccessDeniedException("No tienes permiso para acceder a esta cita.");
+			}
+			if ((cita.getEstado() == EstadoCita.PROGRAMADA || cita.getEstado() == EstadoCita.CONFIRMADA)
+					&& LocalDateTime.of(cita.getFecha(), cita.getHoraInicio()).isAfter(now)) {
+				cita.setEstado(EstadoCita.CANCELADA);
+				cita.setUpdatedAt(now);
+			}
 		}
-		citaRepository.saveAll(futureCitas);
+	}
+
+	private Duenio findLockedDuenio(String email) {
+		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
+		Long clinicaId = duenio.getClinica().getId();
+		planService.lockForWrite(clinicaId);
+		entityManager.refresh(duenio);
+		validateDuenioBelongsToClinic(duenio, clinicaId);
+		return duenio;
+	}
+
+	private Mascota findForWrite(Long id, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
+		Mascota mascota = findEntityById(id, clinicaId);
+		entityManager.refresh(mascota);
+		return findEntityById(id, clinicaId);
 	}
 
 	private Mascota findEntityById(Long id) {

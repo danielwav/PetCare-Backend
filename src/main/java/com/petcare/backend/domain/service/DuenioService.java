@@ -93,7 +93,7 @@ public class DuenioService {
 		validateUniqueEmail(request.email(), id, clinicaId);
 		validateUniqueDocument(request.numeroDocumento(), id, clinicaId);
 
-		Usuario usuario = findUsuarioIfPresent(request.usuarioId());
+		Usuario usuario = request.usuarioId() == null ? duenio.getUsuario() : findUsuarioIfPresent(request.usuarioId());
 		if (usuario != null && !belongsToClinic(usuario, clinicaId)) {
 			throw new AccessDeniedException("El usuario indicado no pertenece a tu clinica.");
 		}

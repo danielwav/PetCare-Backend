@@ -7,6 +7,7 @@ import com.petcare.backend.domain.repository.InasistenciaRepository;
 import com.petcare.backend.persistence.entity.Cita;
 import com.petcare.backend.persistence.entity.Inasistencia;
 import com.petcare.backend.persistence.enums.EstadoCita;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -24,10 +25,16 @@ public class InasistenciaService {
 
 	private final InasistenciaRepository inasistenciaRepository;
 	private final CitaRepository citaRepository;
+	private final PlanService planService;
+	private final EntityManager entityManager;
 
 	@Transactional
 	public InasistenciaResponse register(Long citaId, InasistenciaRequest request, String registradoPor, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		Cita cita = citaRepository.findById(citaId)
+				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
+		entityManager.detach(cita);
+		cita = citaRepository.findById(citaId)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
 		if (cita.getClinica() == null || !cita.getClinica().getId().equals(clinicaId)) {
 			throw new AccessDeniedException("No tienes permiso para acceder a esta cita.");
@@ -52,7 +59,7 @@ public class InasistenciaService {
 				.fechaRegistro(now)
 				.build();
 
-		return toResponse(inasistenciaRepository.save(inasistencia));
+		return toResponse(inasistenciaRepository.saveAndFlush(inasistencia));
 	}
 
 	@Transactional(readOnly = true)

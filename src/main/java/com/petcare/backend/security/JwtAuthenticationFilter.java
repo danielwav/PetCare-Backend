@@ -54,6 +54,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			}
 		}
 
+		var authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication != null && authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.UserDetails details
+				&& !details.isCredentialsNonExpired()) {
+			String path = request.getRequestURI().substring(request.getContextPath().length());
+			boolean accountRequest = (request.getMethod().equals("GET") && path.equals("/api/auth/me"))
+					|| (request.getMethod().equals("POST") && java.util.Set.of("/api/auth/login", "/api/auth/refresh",
+							"/api/auth/change-password", "/api/auth/logout").contains(path));
+			if (!accountRequest && !request.getMethod().equals("OPTIONS")) {
+				response.sendError(HttpServletResponse.SC_FORBIDDEN);
+				return;
+			}
+		}
+
 		filterChain.doFilter(request, response);
 	}
 

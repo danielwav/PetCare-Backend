@@ -16,6 +16,7 @@ import com.petcare.backend.persistence.entity.Mascota;
 import com.petcare.backend.persistence.entity.Veterinario;
 import com.petcare.backend.persistence.enums.EstadoCita;
 import com.petcare.backend.persistence.enums.EstadoMascota;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,10 +35,16 @@ public class AtencionClinicaService {
 	private final CitaRepository citaRepository;
 	private final MascotaRepository mascotaRepository;
 	private final AuthenticatedDuenioService authenticatedDuenioService;
+	private final PlanService planService;
+	private final EntityManager entityManager;
 
 	@Transactional
 	public AtencionClinicaResponse register(Long citaId, AtencionClinicaRequest request, Long clinicaId) {
+		planService.lockForWrite(clinicaId);
 		Cita cita = citaRepository.findById(citaId)
+				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
+		entityManager.detach(cita);
+		cita = citaRepository.findById(citaId)
 				.orElseThrow(() -> new EntityNotFoundException("Cita no encontrada."));
 
 		validateCitaBelongsToClinic(cita, clinicaId);
@@ -64,11 +71,12 @@ public class AtencionClinicaService {
 		cita.setUpdatedAt(LocalDateTime.now());
 
 		Mascota mascota = cita.getMascota();
+		entityManager.refresh(mascota);
 		mascota.setEstado(request.estadoMascota());
 		mascota.setFechaEstado(LocalDateTime.now());
 		mascota.setVeterinarioEstado(cita.getVeterinario().getNombres() + " " + cita.getVeterinario().getApellidos());
 
-		return toResponse(atencionClinicaRepository.save(atencion));
+		return toResponse(atencionClinicaRepository.saveAndFlush(atencion));
 	}
 
 	@Transactional(readOnly = true)
@@ -87,33 +95,35 @@ public class AtencionClinicaService {
 	public AtencionClinicaResponse findByIdForDuenio(Long id, String email) {
 		AtencionClinica atencion = findAtencion(id);
 		validateMascotaBelongsToAuthenticatedDuenio(atencion.getMascota(), email);
-		return toResponse(atencion);
+		return toResponse(atencion, false);
 	}
 
 	@Transactional(readOnly = true)
 	public HistoriaClinicaResponse findHistoriaClinicaByMascotaScoped(Long mascotaId, Long clinicaId) {
 		Mascota mascota = findMascota(mascotaId);
 		validateMascotaBelongsToClinic(mascota, clinicaId);
-		return findHistoriaClinicaByMascota(mascotaId);
+		return toHistoriaResponse(mascota, true);
 	}
 
 	@Transactional(readOnly = true)
 	public HistoriaClinicaResponse findHistoriaClinicaByMascotaForDuenio(Long mascotaId, String email) {
 		Mascota mascota = findMascota(mascotaId);
 		validateMascotaBelongsToAuthenticatedDuenio(mascota, email);
-		return findHistoriaClinicaByMascota(mascotaId);
+		return toHistoriaResponse(mascota, false);
 	}
 
 	@Transactional(readOnly = true)
 	public HistoriaClinicaResponse findHistoriaClinicaByMascota(Long mascotaId) {
-		Mascota mascota = mascotaRepository.findById(mascotaId)
-				.orElseThrow(() -> new EntityNotFoundException("Mascota no encontrada."));
-		List<AtencionClinicaResponse> atenciones = atencionClinicaRepository.findByMascotaIdOrderByFechaRegistroDesc(mascotaId)
+		return toHistoriaResponse(findMascota(mascotaId), true);
+	}
+
+	private HistoriaClinicaResponse toHistoriaResponse(Mascota mascota, boolean includeInternalNotes) {
+		List<AtencionClinicaResponse> atenciones = atencionClinicaRepository.findByMascotaIdOrderByFechaRegistroDesc(mascota.getId())
 				.stream()
-				.map(this::toResponse)
+				.map(atencion -> toResponse(atencion, includeInternalNotes))
 				.toList();
 		List<ControlMensualMascotaResponse> controles = controlMensualMascotaRepository
-				.findByMascotaIdOrderByFechaControlDesc(mascotaId)
+				.findByMascotaIdOrderByFechaControlDesc(mascota.getId())
 				.stream()
 				.map(this::toControlResponse)
 				.toList();
@@ -147,7 +157,7 @@ public class AtencionClinicaService {
 		}
 	}
 
-private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String email) {
+	private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String email) {
 		Duenio duenio = authenticatedDuenioService.findByAuthenticatedEmail(email);
 		if (mascota.getDuenio() == null || !mascota.getDuenio().getId().equals(duenio.getId())) {
 			throw new AccessDeniedException("No tienes permiso para consultar la historia clinica de esta mascota.");
@@ -170,6 +180,10 @@ private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String
 	}
 
 	private AtencionClinicaResponse toResponse(AtencionClinica atencion) {
+		return toResponse(atencion, true);
+	}
+
+	private AtencionClinicaResponse toResponse(AtencionClinica atencion, boolean includeInternalNotes) {
 		Veterinario veterinario = atencion.getVeterinario();
 		return new AtencionClinicaResponse(
 				atencion.getId(),
@@ -183,7 +197,7 @@ private void validateMascotaBelongsToAuthenticatedDuenio(Mascota mascota, String
 				atencion.getTratamiento(),
 				atencion.getRecomendaciones(),
 				atencion.getObservacionesClinicas(),
-				atencion.getNotasInternas(),
+				includeInternalNotes ? atencion.getNotasInternas() : null,
 				atencion.getFechaRegistro()
 		);
 	}

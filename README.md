@@ -89,6 +89,14 @@ to prevent stale writes from undoing plan/state changes. Suspension does not
 cancel an unrelated clinical write already in flight. Payments, automatic
 renewal and self-service activation are not part of P4.
 
+### Clinic Pilot Readiness
+
+The isolated clinical/SaaS pilot and its regression fixes are documented in
+[the pilot validation and migration notes](scripts/pilot-readiness.md).
+Before deploying those fixes, explicitly widen the legacy assistant phone column
+with `scripts/pilot-readiness-migration.sql`; Hibernate schema validation does not
+replace that migration. The validation did not modify production.
+
 ### AWS (Producción actual)
 
 - **Backend API**: `https://d1eq863qpgnni5.cloudfront.net/api`

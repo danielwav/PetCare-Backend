@@ -6,18 +6,23 @@ import com.petcare.backend.domain.dto.response.DisponibilidadVeterinarioResponse
 import com.petcare.backend.domain.dto.response.VeterinarioResponse;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -103,6 +108,48 @@ class VeterinarioServiceTest {
 	}
 
 	@Test
+	void todayOnlyOffersFutureSlotsOnTheScheduleBlockGrid() {
+		LocalDate today = LocalDate.now();
+		VeterinarioRequest base = baseRequest("CMVP-TODAY", "today.vet@test.com", "Medicina general");
+		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
+				base.usuarioId(), base.nombres(), base.apellidos(), base.numeroColegiatura(),
+				base.especialidad(), base.telefono(), base.email(),
+				List.of(new HorarioVeterinarioRequest(today.getDayOfWeek(), LocalTime.of(9, 0), LocalTime.of(11, 0), 30))
+		), clinicaId());
+		LocalDateTime now = today.atTime(10, 0);
+
+		try (MockedStatic<LocalDateTime> time = mockStatic(LocalDateTime.class, CALLS_REAL_METHODS)) {
+			time.when(LocalDateTime::now).thenReturn(now);
+			assertThat(veterinarioService.findDisponibilidad(veterinario.id(), today, 15, clinicaId())
+					.horariosDisponibles()).containsExactly(LocalTime.of(10, 30));
+		}
+	}
+
+	@Test
+	void lateScheduleDoesNotWrapAndLongDurationsDoNotFit() {
+		VeterinarioRequest base = baseRequest("CMVP-LATE", "late.vet@test.com", "Medicina general");
+		VeterinarioResponse veterinario = veterinarioService.create(new VeterinarioRequest(
+				base.usuarioId(), base.nombres(), base.apellidos(), base.numeroColegiatura(),
+				base.especialidad(), base.telefono(), base.email(),
+				List.of(new HorarioVeterinarioRequest(DayOfWeek.MONDAY, LocalTime.of(23, 0), LocalTime.of(23, 59), 30))
+		), clinicaId());
+		LocalDate date = nextDate(DayOfWeek.MONDAY);
+
+		assertThat(veterinarioService.findDisponibilidad(veterinario.id(), date, 30, clinicaId())
+				.horariosDisponibles()).containsExactly(LocalTime.of(23, 0));
+		assertThat(veterinarioService.findDisponibilidad(veterinario.id(), date, 15, clinicaId())
+				.horariosDisponibles()).containsExactly(LocalTime.of(23, 0), LocalTime.of(23, 30));
+		assertThat(veterinarioService.findDisponibilidad(veterinario.id(), date, 1470, clinicaId())
+				.horariosDisponibles()).isEmpty();
+		assertThat(veterinarioService.findDisponibilidad(veterinario.id(), date, Integer.MAX_VALUE, clinicaId())
+				.horariosDisponibles()).isEmpty();
+		assertThatThrownBy(() -> veterinarioService.findDisponibilidad(veterinario.id(), date, 14, clinicaId()))
+				.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> veterinarioService.findDisponibilidad(veterinario.id(), date, 30, clinicaId() + 1))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
+	@Test
 	void searchByEspecialidadAndRejectDuplicatedFields() {
 		veterinarioService.create(baseRequest("CMVP-003", "luisa.vet@test.com", "Odontologia"), clinicaId());
 
@@ -165,7 +212,7 @@ class VeterinarioServiceTest {
 	}
 
 	private LocalDate nextDate(DayOfWeek dayOfWeek) {
-		LocalDate date = LocalDate.now();
+		LocalDate date = LocalDate.now().plusDays(1);
 		while (date.getDayOfWeek() != dayOfWeek) {
 			date = date.plusDays(1);
 		}
