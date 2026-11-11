@@ -58,6 +58,11 @@ class SaasOperatorSecurityTest {
                     .andExpect(status().isForbidden());
             mvc.perform(get("/api/saas/clinicas/1/auditoria").with(user("tenant@test.com").roles(role)))
                     .andExpect(status().isForbidden());
+            mvc.perform(get("/api/saas/clinicas/1/mensualidades").with(user("tenant@test.com").roles(role)))
+                    .andExpect(status().isForbidden());
+            mvc.perform(post("/api/saas/clinicas/1/mensualidades").with(user("tenant@test.com").roles(role))
+                    .contentType("application/json").content("{}"))
+                    .andExpect(status().isForbidden());
             for (String action : new String[]{"plan", "estado"}) {
                 mvc.perform(patch("/api/saas/clinicas/1/" + action).with(user("tenant@test.com").roles(role))
                         .contentType("application/json").content("{}"))
@@ -134,7 +139,7 @@ class SaasOperatorSecurityTest {
 
     @Test
     void invalidOperatorAccountsCannotLoginRefreshOrUseTokensIncludingPublicRoutes() throws Exception {
-        Clinica clinic = clinic("invalid-operator", PlanClinica.PRO);
+        Clinica clinic = clinic("invalid-operator", PlanClinica.TRIAL);
         Usuario operator = account("invalid@test.com", clinic, RoleName.ROLE_SAAS_OPERATOR);
         String token = jwt.generateAccessToken(operator.getEmail(), operator.getId());
         for (boolean mixed : new boolean[]{false, true}) {
@@ -165,7 +170,7 @@ class SaasOperatorSecurityTest {
         assertThatThrownBy(() -> auth.refresh(new RefreshTokenRequest(jwt.generateRefreshToken(operator.getEmail(), operator.getId()))))
                 .isInstanceOf(BadCredentialsException.class);
         operator.setActive(true);
-        Usuario other = account("other@test.com", clinic("binding", PlanClinica.PRO), RoleName.ROLE_ADMIN);
+        Usuario other = account("other@test.com", clinic("binding", PlanClinica.TRIAL), RoleName.ROLE_ADMIN);
         for (Long id : new Long[]{other.getId(), Long.MAX_VALUE}) {
             mvc.perform(get("/api/saas/clinicas").header("Authorization", "Bearer " + jwt.generateAccessToken(operator.getEmail(), id)))
                     .andExpect(status().isForbidden());
@@ -235,7 +240,7 @@ class SaasOperatorSecurityTest {
 
     @Test
     void subjectOnlyTenantTokensCannotBindToReusedEmailAndDisabledTenantRolesCannotAuthenticate() throws Exception {
-        Usuario tenant = account("legacy@test.com", clinic("legacy-identity", PlanClinica.PRO), RoleName.ROLE_ADMIN);
+        Usuario tenant = account("legacy@test.com", clinic("legacy-identity", PlanClinica.TRIAL), RoleName.ROLE_ADMIN);
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + jwt.generateToken(tenant.getEmail())))
                 .andExpect(status().isForbidden());
         assertThatThrownBy(() -> auth.refresh(new RefreshTokenRequest(jwt.generateRefreshToken(tenant.getEmail()))))
@@ -264,7 +269,7 @@ class SaasOperatorSecurityTest {
 
     @Test
     void refreshPreservesEmailChangesWithoutTrustingRecycledSubjectAndUsesCurrentDatabaseRoles() {
-        Usuario tenant = account("old@test.com", clinic("email-change", PlanClinica.PRO), RoleName.ROLE_ADMIN);
+        Usuario tenant = account("old@test.com", clinic("email-change", PlanClinica.TRIAL), RoleName.ROLE_ADMIN);
         String refresh = jwt.generateRefreshToken(tenant.getEmail(), tenant.getId());
         tenant.setEmail("new@test.com");
         tenant.setRoles(roleSet(RoleName.ROLE_DUENIO));
@@ -278,7 +283,7 @@ class SaasOperatorSecurityTest {
 
     @Test
     void tenantCreationAndRoleUpdateCannotGrantOperatorButOriginalAllowlistsStillWork() {
-        Clinica clinic = clinic("tenant-management", PlanClinica.PRO);
+        Clinica clinic = clinic("tenant-management", PlanClinica.TRIAL);
         long before = users.count();
         for (String role : new String[]{"SAAS_OPERATOR", "ADMIN", "ROLE_SAAS_OPERATOR", "UNKNOWN"}) {
             assertThatThrownBy(() -> auth.createInternalUser(new CreateInternalUserRequest("New", "User", "new@test.com", role), clinic.getId()))
@@ -301,7 +306,7 @@ class SaasOperatorSecurityTest {
 
     @Test
     void tenantManagementCannotReadModifyActivateDeleteOrDemoteOperatorTargets() {
-        Clinica clinic = clinic("operator-target", PlanClinica.PRO);
+        Clinica clinic = clinic("operator-target", PlanClinica.TRIAL);
         Usuario target = account("protected@test.com", clinic, RoleName.ROLE_SAAS_OPERATOR, RoleName.ROLE_ADMIN);
         Long id = target.getId();
         assertThat(usuarios.findAll(clinic.getId())).isEmpty();
@@ -332,6 +337,10 @@ class SaasOperatorSecurityTest {
         var now = LocalDateTime.now();
         Clinica clinic = Clinica.builder().nombre(slug).slug(slug).plan(plan).estado(EstadoClinica.ACTIVA)
                 .createdAt(now).updatedAt(now).build();
+        if (plan == PlanClinica.TRIAL) {
+            clinic.setTrialStartedAt(now);
+            clinic.setTrialEndsAt(now.plusDays(14));
+        }
         em.persist(clinic);
         return clinic;
     }

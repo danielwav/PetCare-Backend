@@ -3,9 +3,11 @@ package com.petcare.backend.web;
 import com.petcare.backend.domain.repository.RolRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.entity.Cita;
+import com.petcare.backend.persistence.entity.Clinica;
 import com.petcare.backend.persistence.entity.Rol;
 import com.petcare.backend.persistence.entity.Usuario;
 import com.petcare.backend.persistence.enums.RoleName;
+import com.petcare.backend.persistence.enums.PlanClinica;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,8 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -285,8 +289,11 @@ class ClinicPilotIntegrationTest {
         JsonNode originalPlan = plan(first);
         Map<String, JsonNode> originalData = snapshot(first, second);
         String saasPath = "/api/saas/clinicas/" + first.id();
-        JsonNode downgrade = call(PATCH, saasPath + "/plan", operator.token(), Map.of(
-                "plan", "CONSULTORIO", "reason", "Too many active staff"), 409);
+        JsonNode retired = call(PATCH, saasPath + "/plan", operator.token(), Map.of(
+                "plan", "CONSULTORIO", "reason", "Too many active staff"), 410);
+        assertThat(retired.path("code").asText()).isEqualTo("MONTHLY_PAYMENT_REQUIRED");
+        JsonNode downgrade = call(POST, saasPath + "/mensualidades", operator.token(),
+                activation("CONSULTORIO", "PILOT-DOWN-" + unique(), "Too many active staff", true), 409);
         assertThat(downgrade.path("code").asText()).isEqualTo("STAFF_LIMIT_EXCEEDED");
         assertThat(plan(first)).isEqualTo(originalPlan);
         assertThat(call(GET, saasPath + "/auditoria", operator.token(), null, 200).path("items").size()).isZero();
@@ -327,8 +334,9 @@ class ClinicPilotIntegrationTest {
         em.flush();
         em.clear();
         assertThat(snapshot(first, second)).isEqualTo(originalData);
-        JsonNode upgraded = call(PATCH, saasPath + "/plan", operator.token(), Map.of(
-                "plan", "PRO", "reason", "Pilot paid plan upgrade"), 200);
+        String reference = "PILOT-UP-" + unique().toUpperCase(java.util.Locale.ROOT);
+        JsonNode upgraded = call(POST, saasPath + "/mensualidades", operator.token(),
+                activation("PRO", reference, "Pilot paid plan upgrade", true), 200);
         assertThat(upgraded.path("plan").path("plan").asText()).isEqualTo("PRO");
         assertThat(upgraded.path("plan").path("status").asText()).isEqualTo("ACTIVE");
         em.flush();
@@ -338,12 +346,62 @@ class ClinicPilotIntegrationTest {
         assertThat(audit.get(2)).isEqualTo(suspensionAudit);
         assertThat(audit.get(1).path("previousEstado").asText()).isEqualTo("SUSPENDIDA");
         assertThat(audit.get(1).path("newEstado").asText()).isEqualTo("ACTIVA");
-        assertThat(audit.get(0).path("action").asText()).isEqualTo("PLAN_CHANGED");
+        assertThat(audit.get(0).path("action").asText()).isEqualTo("MONTHLY_ACTIVATED");
         assertThat(audit.get(0).path("previousPlan").asText()).isEqualTo("TRIAL");
         assertThat(audit.get(0).path("newPlan").asText()).isEqualTo("PRO");
+        JsonNode payment = audit.get(0).path("monthlyPayment");
+        long paymentId = upgraded.path("plan").path("lastPaymentId").asLong();
+        assertThat(paymentId).isPositive();
+        assertThat(payment.path("id").asLong()).isEqualTo(paymentId);
+        assertThat(payment.path("auditId").asLong()).isEqualTo(audit.get(0).path("id").asLong());
+        assertThat(payment.path("paymentReference").asText()).isEqualTo(reference);
+        assertThat(payment.path("previousPaymentId").isNull()).isTrue();
+        assertThat(payment.path("reason").asText()).isEqualTo("Pilot paid plan upgrade");
+        assertThat(payment.path("periodStartedAt")).isEqualTo(upgraded.path("plan").path("subscriptionStartedAt"));
+        assertThat(payment.path("periodEndsAt")).isEqualTo(upgraded.path("plan").path("subscriptionEndsAt"));
+        assertThat(call(GET, saasPath + "/mensualidades", operator.token(), null, 200).path("items").get(0)).isEqualTo(payment);
+        String renewalReference = "PILOT-RENEW-" + unique().toUpperCase(java.util.Locale.ROOT);
+        JsonNode renewed = call(POST, saasPath + "/mensualidades", operator.token(), Map.of(
+                "plan", "PRO", "operation", "RENEW", "paymentReference", renewalReference,
+                "reason", "Pilot second confirmed month", "paymentConfirmed", true, "expectedPaymentId", paymentId), 200);
+        assertThat(renewed.path("plan").path("lastPaymentId").asLong()).isNotEqualTo(paymentId);
+        em.flush();
+        em.clear();
+        JsonNode history = call(GET, saasPath + "/mensualidades", operator.token(), null, 200).path("items");
+        assertThat(history.size()).isEqualTo(2);
+        assertThat(history.get(1)).isEqualTo(payment);
+        assertThat(history.get(0).path("paymentReference").asText()).isEqualTo(renewalReference);
+        assertThat(history.get(0).path("previousPaymentId").asLong()).isEqualTo(paymentId);
+        assertThat(history.get(0).path("periodStartedAt")).isEqualTo(payment.path("periodEndsAt"));
+        assertThat(history.get(0).path("periodEndsAt")).isEqualTo(renewed.path("plan").path("subscriptionEndsAt"));
         staff(first, "ASISTENTE");
         assertThat(plan(first).path("staffUsed").asInt()).isEqualTo(4);
         assertThat(plan(second).path("plan").asText()).isEqualTo("TRIAL");
+    }
+
+    @Test
+    void pendingPaidClinicCannotGainCoverageFromRetiredPatchOrUnconfirmedPayment() throws Exception {
+        Account operator = operator();
+        Clinica clinic = em.find(Clinica.class, first.id());
+        clinic.setPlan(PlanClinica.PRO);
+        em.flush();
+        em.clear();
+        assertThat(plan(first).path("status").asText()).isEqualTo("PAYMENT_PENDING");
+        String path = "/api/saas/clinicas/" + first.id();
+        JsonNode retired = call(PATCH, path + "/plan", operator.token(), Map.of(
+                "plan", "PRO", "reason", "Legacy plan must not grant coverage"), 410);
+        assertThat(retired.path("code").asText()).isEqualTo("MONTHLY_PAYMENT_REQUIRED");
+        call(POST, path + "/mensualidades", operator.token(),
+                activation("PRO", "PENDING-" + unique(), "Payment not confirmed", false), 400);
+        assertThat(plan(first).path("status").asText()).isEqualTo("PAYMENT_PENDING");
+        assertThat(call(GET, path + "/mensualidades", operator.token(), null, 200).path("totalElements").asLong()).isZero();
+        assertThat(call(GET, path + "/auditoria", operator.token(), null, 200).path("totalElements").asLong()).isZero();
+        JsonNode denied = call(POST, "/api/usuarios/internal", first.token(), internalUser(email("pending"), "ASISTENTE"), 403);
+        assertThat(denied.path("code").asText()).isEqualTo("PAYMENT_REQUIRED");
+        JsonNode activated = call(POST, path + "/mensualidades", operator.token(),
+                activation("PRO", "CONFIRMED-" + unique(), "Confirmed legacy payment", true), 200);
+        assertThat(activated.path("plan").path("status").asText()).isEqualTo("ACTIVE");
+        staff(first, "ASISTENTE");
     }
 
     private Clinic registerClinic() throws Exception {
@@ -352,6 +410,8 @@ class ClinicPilotIntegrationTest {
                 "fullName", "Pilot Administrator", "email", email, "password", PASSWORD,
                 "telefono", PHONE, "clinicaNombre", "Pilot " + unique()), 201);
         JsonNode clinic = registered.path("user").path("clinica");
+        assertThat(Duration.between(Instant.parse(clinic.path("trialStartedAt").asText() + "Z"),
+                Instant.parse(clinic.path("trialEndsAt").asText() + "Z"))).isEqualTo(Duration.ofDays(14));
         return new Clinic(clinic.path("id").asLong(), clinic.path("slug").asText(), login(email, PASSWORD).path("accessToken").asText());
     }
 
@@ -430,7 +490,10 @@ class ClinicPilotIntegrationTest {
     }
 
     private JsonNode plan(Clinic clinic) throws Exception {
-        return call(GET, "/api/clinicas/me/plan", clinic.token(), null, 200);
+        JsonNode response = call(GET, "/api/clinicas/me/plan", clinic.token(), null, 200);
+        assertThat(response.has("annualPrice")).isFalse();
+        assertThat(response.path("billingCycle").asText()).isEqualTo("MONTHLY");
+        return response;
     }
 
     private Map<String, JsonNode> snapshot(Clinic... clinics) throws Exception {
@@ -480,6 +543,13 @@ class ClinicPilotIntegrationTest {
 
     private Map<String, Object> internalUser(String email, String role) {
         return Map.of("nombres", "Pilot", "apellidos", "Staff", "email", email, "rol", role);
+    }
+
+    private Map<String, Object> activation(String plan, String reference, String reason, boolean confirmed) {
+        Map<String, Object> body = new LinkedHashMap<>(Map.of("plan", plan, "operation", "ACTIVATE",
+                "paymentReference", reference, "reason", reason, "paymentConfirmed", confirmed));
+        body.put("expectedPaymentId", null);
+        return body;
     }
 
     private void assertMoney(JsonNode response, String field, String expected) {

@@ -74,6 +74,7 @@ class PlanServiceTest {
 	void distinctActiveStaffCountExcludesOwnersInactiveAndOtherClinics() {
 		Clinica c = clinics.createClinic("Test", "test");
 		c.setPlan(PlanClinica.CONSULTORIO);
+		ServiceTestFixtures.paidCoverage(em, c, NOW.minusDays(1).toInstant(ZoneOffset.UTC));
 		Rol admin = role(RoleName.ROLE_ADMIN), vet = role(RoleName.ROLE_VETERINARIO);
 		Rol assistant = role(RoleName.ROLE_ASISTENTE), owner = role(RoleName.ROLE_DUENIO);
 		user(c, true, Set.of(admin, vet, assistant));
@@ -87,9 +88,12 @@ class PlanServiceTest {
 		var response = plans.getPlan(c.getId());
 		assertThat(response.staffUsed()).isEqualTo(2);
 		assertThat(response.monthlyPrice()).isEqualByComparingTo("59");
-		assertThat(response.annualPrice()).isEqualByComparingTo("590");
+		assertThat(response.billingCycle()).isEqualTo("MONTHLY");
+		assertThat(response.lastPaymentId()).isEqualTo(c.getLastPaymentId());
+		assertThat(response.subscriptionEndsAt()).isEqualTo(c.getSubscriptionEndsAt());
 		assertThat(response.currency()).isEqualTo("PEN");
 		c.setPlan(PlanClinica.PRO);
+		ServiceTestFixtures.paidCoverage(em, c, NOW.minusDays(1).toInstant(ZoneOffset.UTC));
 		plans.assertStaffCapacity(c.getId());
 		for (int i = 0; i < 3; i++) user(c, true, Set.of(admin));
 		assertCode(() -> plans.assertStaffCapacity(c.getId()), "STAFF_LIMIT_REACHED");
@@ -99,6 +103,7 @@ class PlanServiceTest {
 	void petQuotaBoundaryAndOverLimitRecordsAreRetained() {
 		Clinica c = clinics.createClinic("Test", "test");
 		c.setPlan(PlanClinica.CONSULTORIO);
+		ServiceTestFixtures.paidCoverage(em, c, NOW.minusDays(1).toInstant(ZoneOffset.UTC));
 		Duenio owner = Duenio.builder().clinica(c).nombres("Owner").apellidos("Test").tipoDocumento("DNI")
 				.numeroDocumento("12345678").telefono("123456789").email("owner@test.com").active(true)
 				.createdAt(NOW).updatedAt(NOW).build();
@@ -113,6 +118,7 @@ class PlanServiceTest {
 		assertThat(plans.getPlan(c.getId()).petsUsed()).isEqualTo(501);
 		plans.assertCanWrite(c.getId());
 		c.setPlan(PlanClinica.PRO);
+		ServiceTestFixtures.paidCoverage(em, c, NOW.minusDays(1).toInstant(ZoneOffset.UTC));
 		plans.assertPetCapacity(c.getId());
 		assertThat(plans.getPlan(c.getId()).petsLimit()).isEqualTo(2500);
 		for (int i = 501; i < 2499; i++) pet(c, owner, true);
@@ -121,7 +127,7 @@ class PlanServiceTest {
 		assertCode(() -> plans.assertPetCapacity(c.getId()), "PET_LIMIT_REACHED");
 		assertThat(plans.getPlan(c.getId()).petsUsed()).isEqualTo(2500);
 		assertThat(plans.getPlan(c.getId()).monthlyPrice()).isEqualByComparingTo("129");
-		assertThat(plans.getPlan(c.getId()).annualPrice()).isEqualByComparingTo("1290");
+		assertThat(plans.getPlan(c.getId()).billingCycle()).isEqualTo("MONTHLY");
 	}
 
 	@Test

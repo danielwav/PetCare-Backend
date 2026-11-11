@@ -7,6 +7,7 @@ import com.petcare.backend.domain.dto.request.RegisterRequest;
 import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.UsuarioRepository;
 import com.petcare.backend.persistence.enums.PlanClinica;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +17,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -34,12 +37,14 @@ class AuthQuotaIntegrationTest {
     @Autowired UsuarioRepository userRepository;
     @Autowired PlanService plans;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired EntityManager em;
+    @Autowired Clock clock;
 
     @Test
     void concurrentInactiveOwnerActivationAndPromotionCannotExceedFullQuota() throws Exception {
         var clinic = clinicService.createClinic("Owner race", "owner-race");
         clinic.setPlan(PlanClinica.CONSULTORIO);
-        clinics.save(clinic);
+        paidClinic(clinic);
         var owner = auth.register(new RegisterRequest("Owner", "owner@test.com", "password123", "123", clinic.getSlug()));
         users.toggleActive(owner.user().id(), clinic.getId());
         auth.createInternalUser(staffRequest("first@test.com"), clinic.getId());
@@ -74,7 +79,7 @@ class AuthQuotaIntegrationTest {
     void concurrentInternalCreationCannotConsumeSameLastSeat() throws Exception {
         var clinic = clinicService.createClinic("Concurrent", "concurrent-quota");
         clinic.setPlan(PlanClinica.CONSULTORIO);
-        clinics.save(clinic);
+        paidClinic(clinic);
         auth.createInternalUser(staffRequest("first@test.com"), clinic.getId());
         var ready = new CountDownLatch(2);
         var start = new CountDownLatch(1);
@@ -92,7 +97,7 @@ class AuthQuotaIntegrationTest {
     void rolePromotionAndActivationRespectActualCapacityAndRollbackState() {
         var clinic = clinicService.createClinic("Capacity", "actual-capacity");
         clinic.setPlan(PlanClinica.CONSULTORIO);
-        clinics.save(clinic);
+        paidClinic(clinic);
         var owner = auth.register(new RegisterRequest("Owner", "owner@test.com", "password123", "123", clinic.getSlug()));
         var promoted = users.updateRoles(owner.user().id(),
                 new com.petcare.backend.domain.dto.request.UpdateUserRolesRequest(
@@ -102,7 +107,7 @@ class AuthQuotaIntegrationTest {
         users.toggleActive(owner.user().id(), clinic.getId());
         auth.createInternalUser(staffRequest("third@test.com"), clinic.getId());
         assertThatThrownBy(() -> users.toggleActive(owner.user().id(), clinic.getId()))
-                .isInstanceOf(PlanException.class).hasMessageContaining("Limite");
+                .isInstanceOfSatisfying(PlanException.class, e -> assertThat(e.getCode()).isEqualTo("STAFF_LIMIT_REACHED"));
         assertThat(userRepository.findById(owner.user().id()).orElseThrow().getActive()).isFalse();
     }
 
@@ -125,6 +130,14 @@ class AuthQuotaIntegrationTest {
         return changeConcurrent(() -> auth.createInternalUser(staffRequest(email), clinicId), ready, start);
     }
 
+    private void paidClinic(com.petcare.backend.persistence.entity.Clinica clinic) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> {
+            var managed = em.merge(clinic);
+            var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+            ServiceTestFixtures.paidCoverage(em, managed, now);
+        });
+    }
+
     private int changeConcurrent(Runnable change, CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
         if (!start.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
@@ -132,6 +145,7 @@ class AuthQuotaIntegrationTest {
             change.run();
             return 1;
         } catch (PlanException expected) {
+            assertThat(expected.getCode()).isEqualTo("STAFF_LIMIT_REACHED");
             assertThat(expected.getMessage()).contains("Limite");
             return 0;
         }

@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Locale;
@@ -58,6 +59,7 @@ public class AuthService {
 	private final ClinicaService clinicaService;
 	private final PlanService planService;
 	private final EntityManager entityManager;
+	private final Clock clock;
 
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
@@ -383,7 +385,7 @@ public class AuthService {
 				.map(role -> role.getName().name())
 				.collect(Collectors.toSet());
 
-		ClinicaResponse clinica = usuario.getClinica() != null ? ClinicaService.toResponse(usuario.getClinica()) : null;
+		ClinicaResponse clinica = usuario.getClinica() != null ? ClinicaService.toResponse(usuario.getClinica(), clock) : null;
 		return new UserResponse(
 				usuario.getId(),
 				usuario.getFullName(),

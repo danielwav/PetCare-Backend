@@ -1,17 +1,20 @@
 package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.SaasClinicEstadoRequest;
-import com.petcare.backend.domain.dto.request.SaasClinicPlanRequest;
+import com.petcare.backend.domain.dto.request.MonthlyPaymentRequest;
 import com.petcare.backend.domain.dto.request.UpdateClinicaRequest;
 import com.petcare.backend.persistence.entity.*;
 import com.petcare.backend.persistence.enums.*;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,19 +26,24 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.petcare.backend.domain.service.SaasClinicServiceTest.NOW;
 import static org.assertj.core.api.Assertions.*;
 
 @DataJpaTest(showSql = false)
 @ActiveProfiles("test")
-@Import({PlanService.class, ClinicaService.class, SaasClinicService.class, SaasClinicServiceTest.FixedClock.class})
+@Import({PlanService.class, ClinicaService.class, SaasClinicService.class, ClinicLockConcurrencyTest.TestClock.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ClinicLockConcurrencyTest {
 	@Autowired PlanService plans;
@@ -43,6 +51,22 @@ class ClinicLockConcurrencyTest {
 	@Autowired SaasClinicService saas;
 	@Autowired EntityManager em;
 	@Autowired PlatformTransactionManager transactionManager;
+	@Autowired MutableClock clock;
+
+	@TestConfiguration
+	static class TestClock {
+		@Bean MutableClock clock() { return new MutableClock(); }
+	}
+
+	static class MutableClock extends Clock {
+		volatile Instant now;
+		@Override public Instant instant() { return now; }
+		@Override public ZoneId getZone() { return ZoneOffset.UTC; }
+		@Override public Clock withZone(ZoneId zone) { return Clock.fixed(now, zone); }
+	}
+
+	@BeforeEach
+	void resetClock() { clock.now = NOW.toInstant(ZoneOffset.UTC); }
 
 	@Test
 	void preloadedProCannotAddThirdStaffAfterCommittedDowngrade() {
@@ -58,7 +82,7 @@ class ClinicLockConcurrencyTest {
 			var plan = plans.getPlan(fixture.clinicId());
 			assertThat(plan.plan()).isEqualTo("CONSULTORIO");
 			assertThat(plan.staffUsed()).isEqualTo(2);
-			assertThat(saas.audit(fixture.operator(), fixture.clinicId(), 0, 20).totalElements()).isEqualTo(1);
+			assertThat(saas.audit(fixture.operator(), fixture.clinicId(), 0, 20).totalElements()).isEqualTo(2);
 		});
 	}
 
@@ -153,12 +177,14 @@ class ClinicLockConcurrencyTest {
 					suspend(fixture);
 				});
 				assertThat(stale.getPlan()).isEqualTo(PlanClinica.PRO);
-				var result = saas.changePlan(fixture.operator(), fixture.clinicId(), new SaasClinicPlanRequest("PRO", "Restore paid plan"));
+				clock.now = NOW.plusMonths(2).toInstant(ZoneOffset.UTC);
+				var result = saas.monthlyPayment(fixture.operator(), fixture.clinicId(), new MonthlyPaymentRequest(
+						"PRO", "ACTIVATE", UUID.randomUUID().toString(), "Restore paid plan", true, fixture.paymentId().get()));
 				assertThat(result.plan().plan()).isEqualTo("PRO");
 				assertThat(result.estado()).isEqualTo("SUSPENDIDA");
 			});
 			var entries = saas.audit(fixture.operator(), fixture.clinicId(), 0, 20);
-			assertThat(entries.totalElements()).isEqualTo(3);
+			assertThat(entries.totalElements()).isEqualTo(4);
 			var latest = entries.items().getFirst();
 			assertThat(latest.previousPlan()).isEqualTo("CONSULTORIO");
 			assertThat(latest.newPlan()).isEqualTo("PRO");
@@ -195,7 +221,7 @@ class ClinicLockConcurrencyTest {
 	private void withFixture(int staffCount, int petCount, Consumer<Fixture> test) {
 		Fixture fixture = tx().execute(ignored -> {
 			Clinica clinic = Clinica.builder().nombre("Original profile").slug(UUID.randomUUID().toString())
-					.plan(PlanClinica.PRO).estado(EstadoClinica.ACTIVA).createdAt(NOW).updatedAt(NOW)
+					.plan(PlanClinica.TRIAL).estado(EstadoClinica.ACTIVA).createdAt(NOW).updatedAt(NOW)
 					.trialStartedAt(NOW.minusDays(20)).trialEndsAt(NOW.minusDays(6)).build();
 			em.persist(clinic);
 			Usuario operator = user(null, role(RoleName.ROLE_SAAS_OPERATOR));
@@ -210,12 +236,16 @@ class ClinicLockConcurrencyTest {
 			}
 			Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(operator.getEmail(), "unused",
 					List.of(new SimpleGrantedAuthority("ROLE_SAAS_OPERATOR")));
-			return new Fixture(clinic.getId(), clinic.getSlug(), operator.getId(), authentication, admin.getEmail(), owner == null ? null : owner.getId());
+			var activation = saas.monthlyPayment(authentication, clinic.getId(), new MonthlyPaymentRequest(
+					"PRO", "ACTIVATE", UUID.randomUUID().toString(), "Initial paid coverage", true, null));
+			return new Fixture(clinic.getId(), clinic.getSlug(), operator.getId(), authentication, admin.getEmail(),
+					owner == null ? null : owner.getId(), new AtomicReference<>(activation.plan().lastPaymentId()));
 		});
 		try {
 			test.accept(fixture);
 		} finally {
 			tx().executeWithoutResult(ignored -> {
+				em.createQuery("delete from MonthlyPayment where clinicId = :id").setParameter("id", fixture.clinicId()).executeUpdate();
 				em.createQuery("delete from SaasClinicAudit where clinicId = :id").setParameter("id", fixture.clinicId()).executeUpdate();
 				em.createQuery("delete from Mascota where clinica.id = :id").setParameter("id", fixture.clinicId()).executeUpdate();
 				em.createQuery("delete from Duenio where clinica.id = :id").setParameter("id", fixture.clinicId()).executeUpdate();
@@ -241,7 +271,11 @@ class ClinicLockConcurrencyTest {
 	}
 
 	private void downgrade(Fixture fixture) {
-		saas.changePlan(fixture.operator(), fixture.clinicId(), new SaasClinicPlanRequest("CONSULTORIO", "Lower paid plan"));
+		// A different paid plan can only be activated once the previous period has expired.
+		clock.now = NOW.plusMonths(1).toInstant(ZoneOffset.UTC);
+		var activation = saas.monthlyPayment(fixture.operator(), fixture.clinicId(), new MonthlyPaymentRequest(
+				"CONSULTORIO", "ACTIVATE", UUID.randomUUID().toString(), "Lower paid plan", true, fixture.paymentId().get()));
+		fixture.paymentId().set(activation.plan().lastPaymentId());
 	}
 
 	private void suspend(Fixture fixture) {
@@ -283,5 +317,6 @@ class ClinicLockConcurrencyTest {
 		});
 	}
 
-	private record Fixture(Long clinicId, String slug, Long operatorId, Authentication operator, String adminEmail, Long ownerId) {}
+	private record Fixture(Long clinicId, String slug, Long operatorId, Authentication operator, String adminEmail,
+			Long ownerId, AtomicReference<Long> paymentId) {}
 }

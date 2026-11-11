@@ -40,7 +40,13 @@ public class ClinicWriteGateConfig implements WebMvcConfigurer, HandlerIntercept
 			}
 			if (SaasOperatorPolicy.isSaasPath(path) && !Set.of("GET", "HEAD", "OPTIONS").contains(method)) {
 				if (handler instanceof HandlerMethod hm
-						&& hm.getBeanType() == com.petcare.backend.web.SaasClinicController.class) return true;
+						&& hm.getBeanType() == com.petcare.backend.web.SaasClinicController.class
+						&& ((method.equals("POST") && path.matches("/api/saas/clinicas/[^/]+/mensualidades")
+								&& hm.getMethod().getName().equals("monthlyPayment"))
+								|| (method.equals("PATCH") && path.matches("/api/saas/clinicas/[^/]+/plan")
+										&& hm.getMethod().getName().equals("changePlan"))
+								|| (method.equals("PATCH") && path.matches("/api/saas/clinicas/[^/]+/estado")
+										&& hm.getMethod().getName().equals("changeEstado")))) return true;
 				throw new org.springframework.security.access.AccessDeniedException("Handler SaaS no autorizado.");
 			}
 			if (method.equals("POST") && path.equals("/api/auth/logout")) return true;

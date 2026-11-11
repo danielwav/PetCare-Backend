@@ -136,7 +136,8 @@ class ServicioServiceTest {
 		LocalDateTime now = LocalDateTime.now();
 		Long secondClinic = clinicaRepository.save(Clinica.builder()
 				.nombre("Segunda clinica").slug("segunda").plan(PlanClinica.TRIAL)
-				.estado(EstadoClinica.ACTIVA).createdAt(now).updatedAt(now).build()).getId();
+				.estado(EstadoClinica.ACTIVA).createdAt(now).updatedAt(now)
+				.trialStartedAt(now).trialEndsAt(now.plusDays(14)).build()).getId();
 		ServicioRequest request = baseRequest("Consulta", "Consulta veterinaria", "50.00");
 		ServicioResponse first = servicioService.create(request, firstClinic);
 		ServicioResponse second = servicioService.create(request, secondClinic);

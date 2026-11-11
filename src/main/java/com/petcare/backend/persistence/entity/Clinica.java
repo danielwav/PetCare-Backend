@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -71,4 +72,16 @@ public class Clinica {
 
 	@Column(name = "trial_ends_at")
 	private LocalDateTime trialEndsAt;
+
+	@Column(name = "subscription_started_at")
+	private Instant subscriptionStartedAt;
+
+	@Column(name = "subscription_ends_at")
+	private Instant subscriptionEndsAt;
+
+	@Column(name = "subscription_anchor_day")
+	private Integer subscriptionAnchorDay;
+
+	@Column(name = "last_payment_id")
+	private Long lastPaymentId;
 }

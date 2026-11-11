@@ -2,6 +2,8 @@ package com.petcare.backend.domain.service;
 
 import com.petcare.backend.domain.dto.request.SaasClinicEstadoRequest;
 import com.petcare.backend.domain.dto.request.SaasClinicPlanRequest;
+import com.petcare.backend.domain.dto.request.MonthlyPaymentRequest;
+import com.petcare.backend.domain.repository.MonthlyPaymentRepository;
 import com.petcare.backend.domain.repository.ClinicaRepository;
 import com.petcare.backend.domain.repository.SaasClinicAuditRepository;
 import com.petcare.backend.persistence.entity.*;
@@ -48,14 +50,15 @@ class SaasClinicServiceTest {
 	@Autowired PlanService plans;
 	@Autowired ClinicaRepository clinics;
 	@Autowired SaasClinicAuditRepository audits;
+	@Autowired MonthlyPaymentRepository payments;
 	@Autowired EntityManager em;
 	@Autowired PlatformTransactionManager transactionManager;
 
 	@Test
-	void planChangePreservesStateAndTrialClocksAndStoresTrimmedAuditSnapshot() {
+	void monthlyActivationPreservesStateAndTrialClocksAndStoresTrimmedAuditSnapshot() {
 		Usuario actor = operator();
 		Clinica clinic = clinic(PlanClinica.TRIAL, EstadoClinica.SUSPENDIDA);
-		var result = service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "  Pago confirmado  "));
+		var result = service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", "  Pago confirmado  "));
 		assertThat(result.plan().plan()).isEqualTo("PRO");
 		assertThat(result.estado()).isEqualTo("SUSPENDIDA");
 		assertThat(result.plan().readOnly()).isTrue();
@@ -69,13 +72,28 @@ class SaasClinicServiceTest {
 		assertThat(entry.id()).isNotNull();
 		assertThat(entry.actorId()).isEqualTo(actor.getId());
 		assertThat(entry.actorEmail()).isEqualTo(actor.getEmail());
-		assertThat(entry.action()).isEqualTo("PLAN_CHANGED");
+		assertThat(entry.action()).isEqualTo("MONTHLY_ACTIVATED");
 		assertThat(entry.previousPlan()).isEqualTo("TRIAL");
 		assertThat(entry.newPlan()).isEqualTo("PRO");
 		assertThat(entry.previousEstado()).isEqualTo("SUSPENDIDA");
 		assertThat(entry.newEstado()).isEqualTo("SUSPENDIDA");
 		assertThat(entry.reason()).isEqualTo("Pago confirmado");
 		assertThat(entry.createdAt()).isEqualTo(NOW);
+		var payment = entry.monthlyPayment();
+		assertThat(payment).isNotNull();
+		assertThat(payment.id()).isEqualTo(result.plan().lastPaymentId());
+		assertThat(payment.auditId()).isEqualTo(entry.id());
+		assertThat(payment.clinicId()).isEqualTo(clinic.getId());
+		assertThat(payment.actorId()).isEqualTo(actor.getId());
+		assertThat(payment.actorEmail()).isEqualTo(actor.getEmail());
+		assertThat(payment.reason()).isEqualTo(entry.reason());
+		assertThat(payment.amount()).isEqualByComparingTo("129.00");
+		assertThat(payment.currency()).isEqualTo("PEN");
+		assertThat(payment.billingCycle()).isEqualTo("MONTHLY");
+		assertThat(payment.periodStartedAt()).isEqualTo(NOW.toInstant(ZoneOffset.UTC));
+		assertThat(payment.periodEndsAt()).isEqualTo(NOW.plusMonths(1).toInstant(ZoneOffset.UTC));
+		assertThat(payment.previousPaymentId()).isNull();
+		assertThat(service.monthlyPayments(auth(actor), clinic.getId(), 0, 20).items()).containsExactly(payment);
 	}
 
 	@Test
@@ -98,10 +116,15 @@ class SaasClinicServiceTest {
 	}
 
 	@Test
-	void noOpChangesAreCodedConflictsAndDoNotCreateAudit() {
+	void retiredPlanChangeIsGoneAndNoOpStateChangeDoesNotCreateAudit() {
 		Usuario actor = operator();
 		Clinica clinic = clinic(PlanClinica.PRO, EstadoClinica.ACTIVA);
-		assertCode(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Mismo plan")), "PLAN_UNCHANGED");
+		assertThatThrownBy(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Mismo plan")))
+				.isInstanceOfSatisfying(PlanException.class, e -> {
+					assertThat(e.getStatus()).isEqualTo(HttpStatus.GONE);
+					assertThat(e.getCode()).isEqualTo("MONTHLY_PAYMENT_REQUIRED");
+				});
+		assertThat(plans.getPlan(clinic).status()).isEqualTo("PAYMENT_PENDING");
 		assertCode(() -> service.changeEstado(auth(actor), clinic.getId(), new SaasClinicEstadoRequest("ACTIVA", "Mismo estado")), "ESTADO_UNCHANGED");
 		assertThat(audits.findByClinicId(clinic.getId(), Pageable.unpaged())).isEmpty();
 	}
@@ -111,7 +134,7 @@ class SaasClinicServiceTest {
 		Usuario actor = operator();
 		Clinica clinic = clinic(PlanClinica.TRIAL, EstadoClinica.ACTIVA);
 		for (int i = 0; i < 10; i++) staff(clinic);
-		var result = service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Activar demo"));
+		var result = service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", "Activar demo"));
 		assertThat(result.plan().staffUsed()).isEqualTo(10);
 		assertThat(result.plan().staffLimit()).isEqualTo(5);
 		assertCode(() -> plans.assertStaffCapacity(clinic.getId()), "STAFF_LIMIT_REACHED");
@@ -123,7 +146,7 @@ class SaasClinicServiceTest {
 		Usuario actor = operator();
 		Clinica clinic = clinic(PlanClinica.FREE, EstadoClinica.ACTIVA);
 		for (int i = 0; i < 6; i++) staff(clinic);
-		var result = service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Activar cuenta"));
+		var result = service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", "Activar cuenta"));
 		assertThat(result.plan().plan()).isEqualTo("PRO");
 		assertThat(result.plan().staffUsed()).isEqualTo(6);
 		assertCode(() -> plans.assertStaffCapacity(clinic.getId()), "STAFF_LIMIT_REACHED");
@@ -135,7 +158,7 @@ class SaasClinicServiceTest {
 		for (PlanClinica source : List.of(PlanClinica.PRO, PlanClinica.TRIAL)) {
 			Clinica clinic = clinic(source, EstadoClinica.ACTIVA);
 			for (int i = 0; i < 3; i++) staff(clinic);
-			assertCode(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("CONSULTORIO", "Reducir plan")), "STAFF_LIMIT_EXCEEDED");
+			assertCode(() -> service.monthlyPayment(auth(actor), clinic.getId(), activation("CONSULTORIO", "Reducir plan")), "STAFF_LIMIT_EXCEEDED");
 			assertThat(clinic.getPlan()).isEqualTo(source);
 			assertThat(audits.findByClinicId(clinic.getId(), Pageable.unpaged())).isEmpty();
 		}
@@ -146,7 +169,7 @@ class SaasClinicServiceTest {
 		Usuario actor = operator();
 		Clinica clinic = clinic(PlanClinica.PRO, EstadoClinica.ACTIVA);
 		pets(clinic, 501);
-		assertCode(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("CONSULTORIO", "Reducir plan")), "PET_LIMIT_EXCEEDED");
+		assertCode(() -> service.monthlyPayment(auth(actor), clinic.getId(), activation("CONSULTORIO", "Reducir plan")), "PET_LIMIT_EXCEEDED");
 		assertThat(clinic.getPlan()).isEqualTo(PlanClinica.PRO);
 		assertThat(audits.findByClinicId(clinic.getId(), Pageable.unpaged())).isEmpty();
 	}
@@ -158,7 +181,7 @@ class SaasClinicServiceTest {
 		staff(clinic);
 		staff(clinic);
 		pets(clinic, 500);
-		var result = service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("CONSULTORIO", "Reducir plan"));
+		var result = service.monthlyPayment(auth(actor), clinic.getId(), activation("CONSULTORIO", "Reducir plan"));
 		assertThat(result.plan().staffUsed()).isEqualTo(2);
 		assertThat(result.plan().petsUsed()).isEqualTo(500);
 		assertThat(result.plan().staffLimit()).isEqualTo(2);
@@ -192,9 +215,9 @@ class SaasClinicServiceTest {
 		Authentication authentication = auth(actor);
 		Clinica clinic = clinic(PlanClinica.TRIAL, EstadoClinica.ACTIVA);
 		Clinica other = clinic(PlanClinica.TRIAL, EstadoClinica.ACTIVA);
-		service.changePlan(authentication, clinic.getId(), new SaasClinicPlanRequest("PRO", "Activar plan"));
+		service.monthlyPayment(authentication, clinic.getId(), activation("PRO", "Activar plan"));
 		service.changeEstado(authentication, clinic.getId(), new SaasClinicEstadoRequest("SUSPENDIDA", "Suspender cuenta"));
-		service.changePlan(authentication, other.getId(), new SaasClinicPlanRequest("PRO", "Otra clinica"));
+		service.monthlyPayment(authentication, other.getId(), activation("PRO", "Otra clinica"));
 		String originalEmail = actor.getEmail();
 		actor.setEmail("changed-" + originalEmail);
 		em.flush();
@@ -203,7 +226,10 @@ class SaasClinicServiceTest {
 		assertThat(page.totalPages()).isEqualTo(2);
 		assertThat(page.items().getFirst().action()).isEqualTo("ESTADO_CHANGED");
 		assertThat(page.items().getFirst().actorEmail()).isEqualTo(originalEmail);
-		assertThat(service.audit(auth(actor), clinic.getId(), 1, 1).items().getFirst().action()).isEqualTo("PLAN_CHANGED");
+		assertThat(page.items().getFirst().monthlyPayment()).isNull();
+		var activation = service.audit(auth(actor), clinic.getId(), 1, 1).items().getFirst();
+		assertThat(activation.action()).isEqualTo("MONTHLY_ACTIVATED");
+		assertThat(activation.monthlyPayment().actorEmail()).isEqualTo(originalEmail);
 	}
 
 	@Test
@@ -237,16 +263,18 @@ class SaasClinicServiceTest {
 		for (int[] bounds : List.of(new int[]{-1, 20}, new int[]{0, 0}, new int[]{0, 101})) {
 			assertThatIllegalArgumentException().isThrownBy(() -> service.list(auth(actor), null, bounds[0], bounds[1]));
 			assertThatIllegalArgumentException().isThrownBy(() -> service.audit(auth(actor), clinic.getId(), bounds[0], bounds[1]));
+			assertThatIllegalArgumentException().isThrownBy(() -> service.monthlyPayments(auth(actor), clinic.getId(), bounds[0], bounds[1]));
 		}
 		assertThatIllegalArgumentException().isThrownBy(() -> service.list(auth(actor), "x".repeat(101), 0, 20));
 		for (String reason : List.of("    ", " abcd ", "x".repeat(501))) {
-			assertThatIllegalArgumentException().isThrownBy(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", reason)));
+			assertThatIllegalArgumentException().isThrownBy(() -> service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", reason)));
 			assertThatIllegalArgumentException().isThrownBy(() -> service.changeEstado(auth(actor), clinic.getId(), new SaasClinicEstadoRequest("SUSPENDIDA", reason)));
 		}
-		assertThatIllegalArgumentException().isThrownBy(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("TRIAL", "Valid reason")));
+		assertThatIllegalArgumentException().isThrownBy(() -> service.monthlyPayment(auth(actor), clinic.getId(), activation("TRIAL", "Valid reason")));
 		assertThatIllegalArgumentException().isThrownBy(() -> service.changeEstado(auth(actor), clinic.getId(), new SaasClinicEstadoRequest("OTHER", "Valid reason")));
-		assertThatThrownBy(() -> service.changePlan(auth(actor), Long.MAX_VALUE, new SaasClinicPlanRequest("PRO", "Valid reason"))).isInstanceOf(EntityNotFoundException.class);
+		assertThatThrownBy(() -> service.monthlyPayment(auth(actor), Long.MAX_VALUE, activation("PRO", "Valid reason"))).isInstanceOf(EntityNotFoundException.class);
 		assertThatThrownBy(() -> service.audit(auth(actor), Long.MAX_VALUE, 0, 20)).isInstanceOf(EntityNotFoundException.class);
+		assertThatThrownBy(() -> service.monthlyPayments(auth(actor), Long.MAX_VALUE, 0, 20)).isInstanceOf(EntityNotFoundException.class);
 		assertThat(audits.findByClinicId(clinic.getId(), Pageable.unpaged())).isEmpty();
 	}
 
@@ -254,11 +282,12 @@ class SaasClinicServiceTest {
 	void requestValidationUsesTrimmedReasonAndRejectsNullAndUnsupportedTargets() {
 		try (var factory = Validation.buildDefaultValidatorFactory()) {
 			var validator = factory.getValidator();
-			assertThat(validator.validate(new SaasClinicPlanRequest("PRO", " abcde "))).isEmpty();
+			assertThat(validator.validate(activation("PRO", " abcde "))).isEmpty();
 			assertThat(validator.validate(new SaasClinicEstadoRequest("SUSPENDIDA", "x".repeat(500)))).isEmpty();
-			assertThat(validator.validate(new SaasClinicPlanRequest("FREE", "Valid reason"))).isNotEmpty();
-			assertThat(validator.validate(new SaasClinicPlanRequest(null, "Valid reason"))).isNotEmpty();
-			assertThat(validator.validate(new SaasClinicPlanRequest("PRO", null))).isNotEmpty();
+			assertThat(validator.validate(activation("FREE", "Valid reason"))).isNotEmpty();
+			assertThat(validator.validate(activation(null, "Valid reason"))).isNotEmpty();
+			assertThat(validator.validate(activation("PRO", null))).isNotEmpty();
+			assertThat(validator.validate(new MonthlyPaymentRequest("PRO", "ACTIVATE", "PAY-001", "Valid reason", false, null))).isNotEmpty();
 			assertThat(validator.validate(new SaasClinicEstadoRequest("ACTIVA", " abcd "))).isNotEmpty();
 		}
 	}
@@ -271,14 +300,17 @@ class SaasClinicServiceTest {
 		Clinica clinic = tx.execute(ignored -> clinic(PlanClinica.TRIAL, EstadoClinica.ACTIVA));
 		try {
 			assertThatThrownBy(() -> tx.executeWithoutResult(ignored -> {
-				service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Activar plan"));
+				service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", "Activar plan"));
 				em.flush();
 				assertThat(audits.findByClinicId(clinic.getId(), Pageable.unpaged())).hasSize(1);
+				assertThat(payments.findByClinicId(clinic.getId(), Pageable.unpaged())).hasSize(1);
 				throw new IllegalStateException("Force rollback after both writes");
 			})).isInstanceOf(IllegalStateException.class);
 			tx.executeWithoutResult(ignored -> {
 				assertThat(clinics.findById(clinic.getId()).orElseThrow().getPlan()).isEqualTo(PlanClinica.TRIAL);
 				assertThat(audits.findByClinicId(clinic.getId(), Pageable.unpaged())).isEmpty();
+				assertThat(payments.findByClinicId(clinic.getId(), Pageable.unpaged())).isEmpty();
+				assertThat(clinics.findById(clinic.getId()).orElseThrow().getLastPaymentId()).isNull();
 			});
 		} finally {
 			cleanup(tx, actor, clinic);
@@ -287,14 +319,14 @@ class SaasClinicServiceTest {
 
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	void concurrentSamePlanChangesSerializeToOneAuditAndOneConflict() throws Exception {
+	void concurrentActivationsSerializeToOnePaymentOneAuditAndOneVersionConflict() throws Exception {
 		TransactionTemplate tx = new TransactionTemplate(transactionManager);
 		Usuario actor = tx.execute(ignored -> operator());
 		Clinica clinic = tx.execute(ignored -> clinic(PlanClinica.TRIAL, EstadoClinica.ACTIVA));
 		CountDownLatch locked = new CountDownLatch(1), release = new CountDownLatch(1), secondStarted = new CountDownLatch(1);
 		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
 			Future<?> first = executor.submit(() -> tx.executeWithoutResult(ignored -> {
-				service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Primer cambio"));
+				service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", "Primer cambio"));
 				locked.countDown();
 				await(release);
 			}));
@@ -302,7 +334,7 @@ class SaasClinicServiceTest {
 				assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
 				Future<?> second = executor.submit(() -> {
 					secondStarted.countDown();
-					assertCode(() -> service.changePlan(auth(actor), clinic.getId(), new SaasClinicPlanRequest("PRO", "Segundo cambio")), "PLAN_UNCHANGED");
+					assertCode(() -> service.monthlyPayment(auth(actor), clinic.getId(), activation("PRO", "Segundo cambio")), "PAYMENT_VERSION_CONFLICT");
 				});
 				assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
 				assertThatThrownBy(() -> second.get(150, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
@@ -310,6 +342,7 @@ class SaasClinicServiceTest {
 				first.get(10, TimeUnit.SECONDS);
 				second.get(10, TimeUnit.SECONDS);
 				assertThat(service.audit(auth(actor), clinic.getId(), 0, 20).totalElements()).isEqualTo(1);
+				assertThat(service.monthlyPayments(auth(actor), clinic.getId(), 0, 20).totalElements()).isEqualTo(1);
 			} finally {
 				release.countDown();
 			}
@@ -320,6 +353,7 @@ class SaasClinicServiceTest {
 
 	private void cleanup(TransactionTemplate tx, Usuario actor, Clinica clinic) {
 		tx.executeWithoutResult(ignored -> {
+			em.createQuery("delete from MonthlyPayment where clinicId = :id").setParameter("id", clinic.getId()).executeUpdate();
 			em.createQuery("delete from SaasClinicAudit where clinicId = :id").setParameter("id", clinic.getId()).executeUpdate();
 			em.remove(em.find(Usuario.class, actor.getId()));
 			em.remove(em.find(Clinica.class, clinic.getId()));
@@ -340,6 +374,10 @@ class SaasClinicServiceTest {
 				.active(true).forcePasswordChange(false).roles(Set.of(role(RoleName.ROLE_SAAS_OPERATOR))).createdAt(NOW).build();
 		em.persist(user);
 		return user;
+	}
+
+	private MonthlyPaymentRequest activation(String plan, String reason) {
+		return new MonthlyPaymentRequest(plan, "ACTIVATE", UUID.randomUUID().toString(), reason, true, null);
 	}
 
 	private Authentication auth(Usuario actor) {

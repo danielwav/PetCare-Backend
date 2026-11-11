@@ -1,5 +1,6 @@
 package com.petcare.backend.domain.dto.response;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 public record ClinicaResponse(
@@ -16,6 +17,9 @@ public record ClinicaResponse(
 		LocalDateTime createdAt,
 		LocalDateTime trialStartedAt,
 		LocalDateTime trialEndsAt,
-		boolean readOnly
+		boolean readOnly,
+		String planStatus,
+		Instant subscriptionStartedAt,
+		Instant subscriptionEndsAt
 ) {
 }

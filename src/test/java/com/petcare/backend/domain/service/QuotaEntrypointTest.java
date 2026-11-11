@@ -9,11 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -34,6 +38,7 @@ class QuotaEntrypointTest {
     @Mock PasswordEncoder encoder;
     @Mock ClinicaService clinicService;
     @Mock jakarta.persistence.EntityManager entityManager;
+    @Spy Clock clock = Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC);
     @InjectMocks UsuarioService usuarioService;
     @InjectMocks AuthService authService;
     @InjectMocks AsistenteService asistenteService;
@@ -46,6 +51,9 @@ class QuotaEntrypointTest {
     void setup() {
         clinic = Clinica.builder().id(42L)
                 .plan(com.petcare.backend.persistence.enums.PlanClinica.PRO)
+                .subscriptionStartedAt(clock.instant().minusSeconds(86400))
+                .subscriptionEndsAt(clock.instant().plusSeconds(29 * 86400))
+                .subscriptionAnchorDay(2).lastPaymentId(1L)
                 .estado(com.petcare.backend.persistence.enums.EstadoClinica.ACTIVA).build();
         user = Usuario.builder().id(7L).clinica(clinic).email("user@test.com")
                 .active(true).roles(new HashSet<>(Set.of(role(RoleName.ROLE_DUENIO)))).build();

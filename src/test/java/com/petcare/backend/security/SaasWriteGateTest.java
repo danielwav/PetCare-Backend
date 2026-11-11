@@ -2,6 +2,8 @@ package com.petcare.backend.security;
 
 import com.petcare.backend.config.ClinicWriteGateConfig;
 import com.petcare.backend.domain.dto.request.SaasClinicEstadoRequest;
+import com.petcare.backend.domain.dto.request.SaasClinicPlanRequest;
+import com.petcare.backend.domain.dto.request.MonthlyPaymentRequest;
 import com.petcare.backend.domain.service.ClinicaService;
 import com.petcare.backend.domain.service.PlanService;
 import com.petcare.backend.web.SaasClinicController;
@@ -56,6 +58,32 @@ class SaasWriteGateTest {
         authenticate("SAAS_OPERATOR");
         assertThatThrownBy(() -> gate.preHandle(new MockHttpServletRequest("PATCH", "/api/saas/clinicas/1/estado"),
                 new MockHttpServletResponse(), new Object())).isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(clinics, plans);
+    }
+
+    @Test
+    void monthlyPostRequiresExactMonthlyHandlerAndRejectsUnknownOrMismatchedRoutes() throws Exception {
+        authenticate("SAAS_OPERATOR");
+        var controller = new SaasClinicController(null);
+        var monthly = new HandlerMethod(controller, SaasClinicController.class.getMethod(
+                "monthlyPayment", Authentication.class, Long.class, MonthlyPaymentRequest.class));
+        var retiredPlan = new HandlerMethod(controller, SaasClinicController.class.getMethod(
+                "changePlan", Authentication.class, Long.class, SaasClinicPlanRequest.class));
+        assertThat(gate.preHandle(new MockHttpServletRequest("POST", "/api/saas/clinicas/1/mensualidades"),
+                new MockHttpServletResponse(), monthly)).isTrue();
+        assertThat(gate.preHandle(new MockHttpServletRequest("PATCH", "/api/saas/clinicas/1/plan"),
+                new MockHttpServletResponse(), retiredPlan)).isTrue();
+        for (Object wrongHandler : new Object[]{new Object(), handler(), retiredPlan}) {
+            assertThatThrownBy(() -> gate.preHandle(new MockHttpServletRequest("POST", "/api/saas/clinicas/1/mensualidades"),
+                    new MockHttpServletResponse(), wrongHandler)).isInstanceOf(AccessDeniedException.class);
+        }
+        for (String path : new String[]{"/api/saas/clinicas/1/unknown", "/api/saas/clinicas/1/plan",
+                "/api/saas/clinicas/1/mensualidades/extra", "/api/saas/clinicas/1/estado"}) {
+            assertThatThrownBy(() -> gate.preHandle(new MockHttpServletRequest("POST", path),
+                    new MockHttpServletResponse(), monthly)).isInstanceOf(AccessDeniedException.class);
+        }
+        assertThatThrownBy(() -> gate.preHandle(new MockHttpServletRequest("PATCH", "/api/saas/clinicas/1/mensualidades"),
+                new MockHttpServletResponse(), monthly)).isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(clinics, plans);
     }
 

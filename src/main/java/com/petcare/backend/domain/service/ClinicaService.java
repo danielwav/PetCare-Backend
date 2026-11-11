@@ -105,11 +105,8 @@ public class ClinicaService {
 		return value == null || value.isBlank() ? null : value.trim();
 	}
 
-	public static ClinicaResponse toResponse(Clinica clinica) {
-		return toResponse(clinica, Clock.systemUTC());
-	}
-
 	public static ClinicaResponse toResponse(Clinica clinica, Clock clock) {
+		String status = PlanService.status(clinica, clock);
 		return new ClinicaResponse(
 				clinica.getId(),
 				clinica.getNombre(),
@@ -124,7 +121,10 @@ public class ClinicaService {
 				clinica.getCreatedAt(),
 				clinica.getTrialStartedAt(),
 				clinica.getTrialEndsAt(),
-				PlanService.isReadOnly(clinica, clock)
+				!status.equals("TRIAL") && !status.equals("ACTIVE"),
+				status,
+				clinica.getSubscriptionStartedAt(),
+				clinica.getSubscriptionEndsAt()
 		);
 	}
 

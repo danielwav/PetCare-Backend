@@ -17,6 +17,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -28,10 +29,12 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
     private final PlanService planService;
+    private final Clock clock;
 
     @PersistenceContext
     private EntityManager entityManager;
 
+    @Transactional(readOnly = true)
     public List<UserResponse> findAll(Long clinicaId) {
         return usuarioRepository.findAllByClinicaId(clinicaId).stream()
                 .filter(usuario -> !SaasOperatorPolicy.hasOperatorRole(usuario))
@@ -39,6 +42,7 @@ public class UsuarioService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public UserResponse findById(Long id, Long clinicaId) {
         return toUserResponse(findUsuario(id, clinicaId));
     }
@@ -138,7 +142,7 @@ public class UsuarioService {
         Set<String> roles = usuario.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
-        ClinicaResponse clinica = usuario.getClinica() != null ? ClinicaService.toResponse(usuario.getClinica()) : null;
+        ClinicaResponse clinica = usuario.getClinica() != null ? ClinicaService.toResponse(usuario.getClinica(), clock) : null;
         return new UserResponse(
                 usuario.getId(),
                 usuario.getFullName(),

@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
@@ -77,20 +77,19 @@ public class PlanService {
 
 	@Transactional(readOnly = true)
 	public PlanResponse getPlan(Clinica clinic) {
-		String status = status(clinic, clock);
+		Instant now = clock.instant();
+		String status = status(clinic, now);
+		boolean futureCoverage = hasValidPaidCoverage(clinic) && now.isBefore(clinic.getSubscriptionStartedAt());
 		boolean pro = clinic.getPlan() == PlanClinica.PRO || clinic.getPlan() == PlanClinica.TRIAL;
-		long days = 0;
-		if (clinic.getPlan() == PlanClinica.TRIAL && clinic.getTrialEndsAt() != null) {
-			Duration remaining = Duration.between(now(clock), clinic.getTrialEndsAt());
-			if (remaining.isPositive()) {
-				days = remaining.toDays() + (remaining.minusDays(remaining.toDays()).isZero() ? 0 : 1);
-			}
-		}
+		long days = clinic.getPlan() == PlanClinica.TRIAL && clinic.getTrialEndsAt() != null
+				? daysRemaining(now, clinic.getTrialEndsAt().toInstant(ZoneOffset.UTC)) : 0;
 		return new PlanResponse(clinic.getPlan().name(), pro ? "PRO" : clinic.getPlan().name(), status,
-				isReadOnly(clinic, clock), clinic.getTrialStartedAt(), clinic.getTrialEndsAt(), days,
+				!status.equals("TRIAL") && !status.equals("ACTIVE"), clinic.getTrialStartedAt(), clinic.getTrialEndsAt(), days,
 				staffUsed(clinic.getId()), staffLimit(clinic.getPlan()), petsUsed(clinic.getId()), petLimit(clinic.getPlan()),
-				BigDecimal.valueOf(pro ? 129 : clinic.getPlan() == PlanClinica.CONSULTORIO ? 59 : 0),
-				BigDecimal.valueOf(pro ? 1290 : clinic.getPlan() == PlanClinica.CONSULTORIO ? 590 : 0), "PEN");
+				monthlyPrice(clinic.getPlan()), "PEN", "MONTHLY", clinic.getSubscriptionStartedAt(),
+				clinic.getSubscriptionEndsAt(), hasValidPaidCoverage(clinic) ? daysRemaining(now, clinic.getSubscriptionEndsAt()) : 0,
+				clinic.getLastPaymentId(), !hasActivePaidCoverage(clinic, now) && !futureCoverage,
+				hasValidPaidCoverage(clinic) && !futureCoverage);
 	}
 
 	// The caller holds the clinic row lock, also used by capacity-increasing writes.
@@ -109,19 +108,58 @@ public class PlanService {
 		return !status.equals("TRIAL") && !status.equals("ACTIVE");
 	}
 
-	private static String status(Clinica clinic, Clock clock) {
+	public static String status(Clinica clinic, Clock clock) {
+		return status(clinic, clock.instant());
+	}
+
+	private static String status(Clinica clinic, Instant now) {
 		if (clinic.getEstado() != EstadoClinica.ACTIVA) return "SUSPENDED";
 		if (clinic.getPlan() == PlanClinica.TRIAL) {
-			return clinic.getTrialEndsAt() != null && now(clock).isBefore(clinic.getTrialEndsAt()) ? "TRIAL" : "EXPIRED";
+			return clinic.getTrialEndsAt() != null && now.isBefore(clinic.getTrialEndsAt().toInstant(ZoneOffset.UTC)) ? "TRIAL" : "EXPIRED";
 		}
-		return clinic.getPlan() == PlanClinica.PRO || clinic.getPlan() == PlanClinica.CONSULTORIO ? "ACTIVE" : "READ_ONLY";
+		if (clinic.getPlan() == PlanClinica.PRO || clinic.getPlan() == PlanClinica.CONSULTORIO) {
+			if (!hasValidPaidCoverage(clinic)) return "PAYMENT_PENDING";
+			if (now.isBefore(clinic.getSubscriptionStartedAt())) return "PAYMENT_PENDING";
+			return hasActivePaidCoverage(clinic, now) ? "ACTIVE" : "SUBSCRIPTION_EXPIRED";
+		}
+		return "READ_ONLY";
+	}
+
+	public static boolean hasValidPaidCoverage(Clinica clinic) {
+		return (clinic.getPlan() == PlanClinica.PRO || clinic.getPlan() == PlanClinica.CONSULTORIO)
+				&& clinic.getSubscriptionStartedAt() != null && clinic.getSubscriptionEndsAt() != null
+				&& clinic.getSubscriptionStartedAt().isBefore(clinic.getSubscriptionEndsAt())
+				&& clinic.getSubscriptionAnchorDay() != null && clinic.getSubscriptionAnchorDay() >= 1
+				&& clinic.getSubscriptionAnchorDay() <= 31
+				&& clinic.getLastPaymentId() != null && clinic.getLastPaymentId() > 0;
+	}
+
+	public static boolean hasActivePaidCoverage(Clinica clinic, Instant now) {
+		return hasValidPaidCoverage(clinic) && !now.isBefore(clinic.getSubscriptionStartedAt())
+				&& now.isBefore(clinic.getSubscriptionEndsAt());
+	}
+
+	public static BigDecimal monthlyPrice(PlanClinica plan) {
+		return new BigDecimal(plan == PlanClinica.PRO || plan == PlanClinica.TRIAL ? "129.00"
+				: plan == PlanClinica.CONSULTORIO ? "59.00" : "0.00");
 	}
 
 	private void assertWritable(Clinica clinic) {
 		String status = status(clinic, clock);
 		if (!status.equals("TRIAL") && !status.equals("ACTIVE")) {
-			throw new PlanException(HttpStatus.FORBIDDEN, status.equals("EXPIRED") ? "TRIAL_EXPIRED" : "CLINIC_READ_ONLY",
-					status.equals("EXPIRED") ? "El periodo de prueba ha finalizado." : "La clinica esta en modo solo lectura.");
+			String code = switch (status) {
+				case "EXPIRED" -> "TRIAL_EXPIRED";
+				case "PAYMENT_PENDING" -> "PAYMENT_REQUIRED";
+				case "SUBSCRIPTION_EXPIRED" -> "SUBSCRIPTION_EXPIRED";
+				default -> "CLINIC_READ_ONLY";
+			};
+			String message = switch (status) {
+				case "EXPIRED" -> "El periodo de prueba ha finalizado.";
+				case "PAYMENT_PENDING" -> "Se requiere registrar una mensualidad confirmada.";
+				case "SUBSCRIPTION_EXPIRED" -> "La suscripcion mensual ha finalizado.";
+				default -> "La clinica esta en modo solo lectura.";
+			};
+			throw new PlanException(HttpStatus.FORBIDDEN, code, message);
 		}
 	}
 
@@ -163,7 +201,9 @@ public class PlanService {
 		return plan == PlanClinica.CONSULTORIO ? 500 : plan == PlanClinica.FREE ? 0 : 2500;
 	}
 
-	private static LocalDateTime now(Clock clock) {
-		return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+	private static long daysRemaining(Instant now, Instant end) {
+		Duration remaining = Duration.between(now, end);
+		return remaining.isPositive()
+				? remaining.toDays() + (remaining.minusDays(remaining.toDays()).isZero() ? 0 : 1) : 0;
 	}
 }

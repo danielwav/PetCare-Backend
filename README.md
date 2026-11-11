@@ -55,8 +55,8 @@ Expired trials and FREE clinics retain reads but reject operational writes.
 Existing accounts and histories are never deleted to satisfy a limit.
 
 Admins can inspect usage and expiry at `GET /api/clinicas/me/plan` and `/mi-plan`
-in the frontend. Prices are references only; payment and self-service paid-plan
-activation are not implemented. Keep `APP_SEED_DATA_ENABLED=false` in production:
+in the frontend. P5 adds manually confirmed monthly coverage as described below;
+self-service checkout is not implemented. Keep `APP_SEED_DATA_ENABLED=false` in production:
 demo loading is now opt-in, while role initialization remains enabled.
 
 ### P4 SaaS Operations
@@ -73,7 +73,7 @@ new-account-only provisioning, runtime privilege requirements and revocation.
 The `prod` profile requires an explicit `JWT_SECRET`, without a development
 fallback. No operator credentials are seeded or included in the repository.
 
-Operators can search/paginate clinics, assign CONSULTORIO or PRO, independently
+P4 originally let operators search/paginate clinics, assign CONSULTORIO or PRO, independently
 suspend/reactivate a clinic, and inspect its paginated audit history. Changes
 require a trimmed reason of 5-500 characters. The actor, timestamp, reason and
 before/after values are persisted atomically with each change; the migration
@@ -88,6 +88,40 @@ edits, capacity changes and SaaS mutations share an authoritative clinic lock
 to prevent stale writes from undoing plan/state changes. Suspension does not
 cancel an unrelated clinical write already in flight. Payments, automatic
 renewal and self-service activation are not part of P4.
+
+### P5 Monthly Plans
+
+Commercial plans are monthly only: CONSULTORIO is PEN 59.00 for 2 active staff
+accounts / 500 active pets; PRO is PEN 129.00 for 5 / 2,500. The free PRO trial
+remains 14 days. There are no annual offers, automatic charges or tax invoices.
+
+Operators record an externally verified payment at
+`POST /api/saas/clinicas/{id}/mensualidades` with `plan`, `operation` (ACTIVATE or
+RENEW), `paymentReference`, `reason`, `paymentConfirmed=true` and the displayed
+`expectedPaymentId` (null initially). Amounts and coverage dates are server-owned.
+References are normalized and globally unique. Exact retries do not create
+another payment, audit entry or extension; conflicting references/versions return
+409. Payment, audit and clinic changes commit atomically.
+
+Coverage uses calendar months in America/Lima, not fixed 30-day periods. Early
+renewal extends the existing end while preserving the anchor day and continuous
+coverage start. Expired renewal starts at confirmation time with a new anchor.
+An active paid plan can only renew the same tier; changes wait until expiry.
+Suspension is independent: paying does not reactivate a suspended clinic, and
+reactivation does not extend coverage. Trial dates and existing records remain.
+
+At exact expiry the clinic becomes read-only. `PAYMENT_PENDING` denotes missing
+coverage; `SUBSCRIPTION_EXPIRED` denotes expired monthly coverage. Trial expiry
+still uses `EXPIRED` / `TRIAL_EXPIRED`. Session clinic responses and `/plan` use the
+same injected clock. Operator history is paginated at `GET .../mensualidades`, and
+each billing audit includes its immutable payment snapshot.
+
+P5 removes `annualPrice` from the plan response and retires the old reason-only
+`PATCH .../plan` with 410 `MONTHLY_PAYMENT_REQUIRED`. Deploy backend and frontend
+as a coordinated release; old clients must use the monthly-confirmation flow.
+Follow [the P5 migration and operations runbook](scripts/p5-runbook.md) before
+deploying: legacy paid coverage is never invented, and new history grants must
+be applied explicitly to the non-owner runtime DB identity.
 
 ### Clinic Pilot Readiness
 

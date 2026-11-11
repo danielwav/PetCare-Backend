@@ -564,7 +564,8 @@ class AppointmentConcurrencyTest {
 			LocalDateTime now = LocalDateTime.now();
 			LocalDate date = now.toLocalDate().plusDays(past ? -1 : 1);
 			Clinica clinic = Clinica.builder().nombre("Scheduling test").slug(UUID.randomUUID().toString())
-					.plan(PlanClinica.PRO).estado(EstadoClinica.ACTIVA).createdAt(now).updatedAt(now).build();
+					.plan(PlanClinica.TRIAL).estado(EstadoClinica.ACTIVA).createdAt(now).updatedAt(now)
+					.trialStartedAt(now).trialEndsAt(now.plusDays(14)).build();
 			em.persist(clinic);
 			String email = UUID.randomUUID() + "@test.com";
 			Usuario user = Usuario.builder().clinica(clinic).fullName("Owner").email(email).password("unused")

@@ -291,7 +291,7 @@ class VacunaServiceTest {
 		return clinicaRepository.save(Clinica.builder()
 				.nombre("Otra clinica").slug("otra-clinica")
 				.plan(defaultClinic.getPlan()).estado(defaultClinic.getEstado())
-				.createdAt(now).updatedAt(now).build()).getId();
+				.createdAt(now).updatedAt(now).trialStartedAt(now).trialEndsAt(now.plusDays(14)).build()).getId();
 	}
 
 	private TestData createBaseData() {

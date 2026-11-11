@@ -266,10 +266,10 @@ class ClinicDirectoryTest {
 
 	private Clinica clinic(String name, String slug, EstadoClinica state) {
 		LocalDateTime now = LocalDateTime.now();
-		Clinica clinic = Clinica.builder().nombre(name).slug(slug).plan(PlanClinica.PRO).estado(state)
+		Clinica clinic = Clinica.builder().nombre(name).slug(slug).plan(PlanClinica.TRIAL).estado(state)
 				.direccion("Avenida Norte").telefono("123456789").horarioAtencion("9-18")
 				.descripcion("Public description").logoUrl("https://example.com/logo.png")
-				.createdAt(now).updatedAt(now).build();
+				.createdAt(now).updatedAt(now).trialStartedAt(now).trialEndsAt(now.plusDays(14)).build();
 		entityManager.persist(clinic);
 		return clinic;
 	}
